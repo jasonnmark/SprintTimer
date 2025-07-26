@@ -1,0 +1,950 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		96194DF62E3546E1008DA54F /* SprintTimer Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 96194DF52E3546E1008DA54F /* SprintTimer Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		96194DE02E3546E1008DA54F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 96194DCA2E3546E0008DA54F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 96194DD12E3546E1008DA54F;
+			remoteInfo = SprintTimer;
+		};
+		96194DEA2E3546E1008DA54F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 96194DCA2E3546E0008DA54F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 96194DD12E3546E1008DA54F;
+			remoteInfo = SprintTimer;
+		};
+		96194DF72E3546E1008DA54F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 96194DCA2E3546E0008DA54F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 96194DF42E3546E1008DA54F;
+			remoteInfo = "SprintTimer Watch App";
+		};
+		96194E052E3546E2008DA54F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 96194DCA2E3546E0008DA54F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 96194DF42E3546E1008DA54F;
+			remoteInfo = "SprintTimer Watch App";
+		};
+		96194E0F2E3546E2008DA54F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 96194DCA2E3546E0008DA54F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 96194DF42E3546E1008DA54F;
+			remoteInfo = "SprintTimer Watch App";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		96194E1B2E3546E2008DA54F /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				96194DF62E3546E1008DA54F /* SprintTimer Watch App.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		96194DD22E3546E1008DA54F /* SprintTimer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SprintTimer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		96194DDF2E3546E1008DA54F /* SprintTimerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SprintTimerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		96194DE92E3546E1008DA54F /* SprintTimerUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SprintTimerUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		96194DF52E3546E1008DA54F /* SprintTimer Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SprintTimer Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		96194E042E3546E2008DA54F /* SprintTimer Watch AppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "SprintTimer Watch AppTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		96194E0E2E3546E2008DA54F /* SprintTimer Watch AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "SprintTimer Watch AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		96194DD42E3546E1008DA54F /* SprintTimer */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SprintTimer;
+			sourceTree = "<group>";
+		};
+		96194DE22E3546E1008DA54F /* SprintTimerTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SprintTimerTests;
+			sourceTree = "<group>";
+		};
+		96194DEC2E3546E1008DA54F /* SprintTimerUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SprintTimerUITests;
+			sourceTree = "<group>";
+		};
+		96194DF92E3546E1008DA54F /* SprintTimer Watch App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "SprintTimer Watch App";
+			sourceTree = "<group>";
+		};
+		96194E072E3546E2008DA54F /* SprintTimer Watch AppTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "SprintTimer Watch AppTests";
+			sourceTree = "<group>";
+		};
+		96194E112E3546E2008DA54F /* SprintTimer Watch AppUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "SprintTimer Watch AppUITests";
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		96194DCF2E3546E1008DA54F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194DDC2E3546E1008DA54F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194DE62E3546E1008DA54F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194DF22E3546E1008DA54F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194E012E3546E2008DA54F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194E0B2E3546E2008DA54F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		96194DC92E3546E0008DA54F = {
+			isa = PBXGroup;
+			children = (
+				96194DD42E3546E1008DA54F /* SprintTimer */,
+				96194DE22E3546E1008DA54F /* SprintTimerTests */,
+				96194DEC2E3546E1008DA54F /* SprintTimerUITests */,
+				96194DF92E3546E1008DA54F /* SprintTimer Watch App */,
+				96194E072E3546E2008DA54F /* SprintTimer Watch AppTests */,
+				96194E112E3546E2008DA54F /* SprintTimer Watch AppUITests */,
+				96194DD32E3546E1008DA54F /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		96194DD32E3546E1008DA54F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				96194DD22E3546E1008DA54F /* SprintTimer.app */,
+				96194DDF2E3546E1008DA54F /* SprintTimerTests.xctest */,
+				96194DE92E3546E1008DA54F /* SprintTimerUITests.xctest */,
+				96194DF52E3546E1008DA54F /* SprintTimer Watch App.app */,
+				96194E042E3546E2008DA54F /* SprintTimer Watch AppTests.xctest */,
+				96194E0E2E3546E2008DA54F /* SprintTimer Watch AppUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		96194DD12E3546E1008DA54F /* SprintTimer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 96194E1C2E3546E2008DA54F /* Build configuration list for PBXNativeTarget "SprintTimer" */;
+			buildPhases = (
+				96194DCE2E3546E1008DA54F /* Sources */,
+				96194DCF2E3546E1008DA54F /* Frameworks */,
+				96194DD02E3546E1008DA54F /* Resources */,
+				96194E1B2E3546E2008DA54F /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				96194DF82E3546E1008DA54F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				96194DD42E3546E1008DA54F /* SprintTimer */,
+			);
+			name = SprintTimer;
+			packageProductDependencies = (
+			);
+			productName = SprintTimer;
+			productReference = 96194DD22E3546E1008DA54F /* SprintTimer.app */;
+			productType = "com.apple.product-type.application";
+		};
+		96194DDE2E3546E1008DA54F /* SprintTimerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 96194E1F2E3546E2008DA54F /* Build configuration list for PBXNativeTarget "SprintTimerTests" */;
+			buildPhases = (
+				96194DDB2E3546E1008DA54F /* Sources */,
+				96194DDC2E3546E1008DA54F /* Frameworks */,
+				96194DDD2E3546E1008DA54F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				96194DE12E3546E1008DA54F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				96194DE22E3546E1008DA54F /* SprintTimerTests */,
+			);
+			name = SprintTimerTests;
+			packageProductDependencies = (
+			);
+			productName = SprintTimerTests;
+			productReference = 96194DDF2E3546E1008DA54F /* SprintTimerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		96194DE82E3546E1008DA54F /* SprintTimerUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 96194E222E3546E2008DA54F /* Build configuration list for PBXNativeTarget "SprintTimerUITests" */;
+			buildPhases = (
+				96194DE52E3546E1008DA54F /* Sources */,
+				96194DE62E3546E1008DA54F /* Frameworks */,
+				96194DE72E3546E1008DA54F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				96194DEB2E3546E1008DA54F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				96194DEC2E3546E1008DA54F /* SprintTimerUITests */,
+			);
+			name = SprintTimerUITests;
+			packageProductDependencies = (
+			);
+			productName = SprintTimerUITests;
+			productReference = 96194DE92E3546E1008DA54F /* SprintTimerUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		96194DF42E3546E1008DA54F /* SprintTimer Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 96194E182E3546E2008DA54F /* Build configuration list for PBXNativeTarget "SprintTimer Watch App" */;
+			buildPhases = (
+				96194DF12E3546E1008DA54F /* Sources */,
+				96194DF22E3546E1008DA54F /* Frameworks */,
+				96194DF32E3546E1008DA54F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				96194DF92E3546E1008DA54F /* SprintTimer Watch App */,
+			);
+			name = "SprintTimer Watch App";
+			packageProductDependencies = (
+			);
+			productName = "SprintTimer Watch App";
+			productReference = 96194DF52E3546E1008DA54F /* SprintTimer Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
+		96194E032E3546E2008DA54F /* SprintTimer Watch AppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 96194E252E3546E2008DA54F /* Build configuration list for PBXNativeTarget "SprintTimer Watch AppTests" */;
+			buildPhases = (
+				96194E002E3546E2008DA54F /* Sources */,
+				96194E012E3546E2008DA54F /* Frameworks */,
+				96194E022E3546E2008DA54F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				96194E062E3546E2008DA54F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				96194E072E3546E2008DA54F /* SprintTimer Watch AppTests */,
+			);
+			name = "SprintTimer Watch AppTests";
+			packageProductDependencies = (
+			);
+			productName = "SprintTimer Watch AppTests";
+			productReference = 96194E042E3546E2008DA54F /* SprintTimer Watch AppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		96194E0D2E3546E2008DA54F /* SprintTimer Watch AppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 96194E282E3546E2008DA54F /* Build configuration list for PBXNativeTarget "SprintTimer Watch AppUITests" */;
+			buildPhases = (
+				96194E0A2E3546E2008DA54F /* Sources */,
+				96194E0B2E3546E2008DA54F /* Frameworks */,
+				96194E0C2E3546E2008DA54F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				96194E102E3546E2008DA54F /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				96194E112E3546E2008DA54F /* SprintTimer Watch AppUITests */,
+			);
+			name = "SprintTimer Watch AppUITests";
+			packageProductDependencies = (
+			);
+			productName = "SprintTimer Watch AppUITests";
+			productReference = 96194E0E2E3546E2008DA54F /* SprintTimer Watch AppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		96194DCA2E3546E0008DA54F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1640;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					96194DD12E3546E1008DA54F = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					96194DDE2E3546E1008DA54F = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 96194DD12E3546E1008DA54F;
+					};
+					96194DE82E3546E1008DA54F = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 96194DD12E3546E1008DA54F;
+					};
+					96194DF42E3546E1008DA54F = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					96194E032E3546E2008DA54F = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 96194DF42E3546E1008DA54F;
+					};
+					96194E0D2E3546E2008DA54F = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 96194DF42E3546E1008DA54F;
+					};
+				};
+			};
+			buildConfigurationList = 96194DCD2E3546E0008DA54F /* Build configuration list for PBXProject "SprintTimer" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 96194DC92E3546E0008DA54F;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 96194DD32E3546E1008DA54F /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				96194DD12E3546E1008DA54F /* SprintTimer */,
+				96194DDE2E3546E1008DA54F /* SprintTimerTests */,
+				96194DE82E3546E1008DA54F /* SprintTimerUITests */,
+				96194DF42E3546E1008DA54F /* SprintTimer Watch App */,
+				96194E032E3546E2008DA54F /* SprintTimer Watch AppTests */,
+				96194E0D2E3546E2008DA54F /* SprintTimer Watch AppUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		96194DD02E3546E1008DA54F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194DDD2E3546E1008DA54F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194DE72E3546E1008DA54F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194DF32E3546E1008DA54F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194E022E3546E2008DA54F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194E0C2E3546E2008DA54F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		96194DCE2E3546E1008DA54F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194DDB2E3546E1008DA54F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194DE52E3546E1008DA54F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194DF12E3546E1008DA54F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194E002E3546E2008DA54F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		96194E0A2E3546E2008DA54F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		96194DE12E3546E1008DA54F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 96194DD12E3546E1008DA54F /* SprintTimer */;
+			targetProxy = 96194DE02E3546E1008DA54F /* PBXContainerItemProxy */;
+		};
+		96194DEB2E3546E1008DA54F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 96194DD12E3546E1008DA54F /* SprintTimer */;
+			targetProxy = 96194DEA2E3546E1008DA54F /* PBXContainerItemProxy */;
+		};
+		96194DF82E3546E1008DA54F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 96194DF42E3546E1008DA54F /* SprintTimer Watch App */;
+			targetProxy = 96194DF72E3546E1008DA54F /* PBXContainerItemProxy */;
+		};
+		96194E062E3546E2008DA54F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 96194DF42E3546E1008DA54F /* SprintTimer Watch App */;
+			targetProxy = 96194E052E3546E2008DA54F /* PBXContainerItemProxy */;
+		};
+		96194E102E3546E2008DA54F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 96194DF42E3546E1008DA54F /* SprintTimer Watch App */;
+			targetProxy = 96194E0F2E3546E2008DA54F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		96194E162E3546E2008DA54F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		96194E172E3546E2008DA54F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		96194E192E3546E2008DA54F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = SprintTimer;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.JasonMark.SprintTimer;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.JasonMark.SprintTimer.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 11.5;
+			};
+			name = Debug;
+		};
+		96194E1A2E3546E2008DA54F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = SprintTimer;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.JasonMark.SprintTimer;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.JasonMark.SprintTimer.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 11.5;
+			};
+			name = Release;
+		};
+		96194E1D2E3546E2008DA54F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = SprintTimer;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.JasonMark.SprintTimer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		96194E1E2E3546E2008DA54F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = SprintTimer;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.JasonMark.SprintTimer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		96194E202E3546E2008DA54F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.JasonMark.SprintTimerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SprintTimer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SprintTimer";
+			};
+			name = Debug;
+		};
+		96194E212E3546E2008DA54F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.JasonMark.SprintTimerTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SprintTimer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SprintTimer";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		96194E232E3546E2008DA54F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.JasonMark.SprintTimerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = SprintTimer;
+			};
+			name = Debug;
+		};
+		96194E242E3546E2008DA54F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.JasonMark.SprintTimerUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = SprintTimer;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		96194E262E3546E2008DA54F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.JasonMark.SprintTimer-Watch-AppTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SprintTimer Watch App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SprintTimer Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 11.5;
+			};
+			name = Debug;
+		};
+		96194E272E3546E2008DA54F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.JasonMark.SprintTimer-Watch-AppTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SprintTimer Watch App.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SprintTimer Watch App";
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 11.5;
+			};
+			name = Release;
+		};
+		96194E292E3546E2008DA54F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.JasonMark.SprintTimer-Watch-AppUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_TARGET_NAME = "SprintTimer Watch App";
+				WATCHOS_DEPLOYMENT_TARGET = 11.5;
+			};
+			name = Debug;
+		};
+		96194E2A2E3546E2008DA54F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.JasonMark.SprintTimer-Watch-AppUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				TEST_TARGET_NAME = "SprintTimer Watch App";
+				VALIDATE_PRODUCT = YES;
+				WATCHOS_DEPLOYMENT_TARGET = 11.5;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		96194DCD2E3546E0008DA54F /* Build configuration list for PBXProject "SprintTimer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96194E162E3546E2008DA54F /* Debug */,
+				96194E172E3546E2008DA54F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		96194E182E3546E2008DA54F /* Build configuration list for PBXNativeTarget "SprintTimer Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96194E192E3546E2008DA54F /* Debug */,
+				96194E1A2E3546E2008DA54F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		96194E1C2E3546E2008DA54F /* Build configuration list for PBXNativeTarget "SprintTimer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96194E1D2E3546E2008DA54F /* Debug */,
+				96194E1E2E3546E2008DA54F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		96194E1F2E3546E2008DA54F /* Build configuration list for PBXNativeTarget "SprintTimerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96194E202E3546E2008DA54F /* Debug */,
+				96194E212E3546E2008DA54F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		96194E222E3546E2008DA54F /* Build configuration list for PBXNativeTarget "SprintTimerUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96194E232E3546E2008DA54F /* Debug */,
+				96194E242E3546E2008DA54F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		96194E252E3546E2008DA54F /* Build configuration list for PBXNativeTarget "SprintTimer Watch AppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96194E262E3546E2008DA54F /* Debug */,
+				96194E272E3546E2008DA54F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		96194E282E3546E2008DA54F /* Build configuration list for PBXNativeTarget "SprintTimer Watch AppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96194E292E3546E2008DA54F /* Debug */,
+				96194E2A2E3546E2008DA54F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 96194DCA2E3546E0008DA54F /* Project object */;
+}
