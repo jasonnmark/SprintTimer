@@ -2,13 +2,13 @@ import SwiftUI
 import SwiftData
 
 @main
-struct SprintTimerWatchApp: App {
-    var sharedModelContainer: ModelContainer = {
+struct SprintTimerApp: App {
+    let sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Run.self
         ])
         
-        // Use App Group for shared data with iPhone
+        // Use App Group for shared data with Watch
         let groupURL = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: "group.com.jasonmark.SprintTimer" // Update with your actual app group ID
         )!
@@ -19,18 +19,18 @@ struct SprintTimerWatchApp: App {
             url: databaseURL,
             allowsSave: true
         )
-
+        
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
     }()
-
+    
     var body: some Scene {
         WindowGroup {
-            ContentView() // This is your existing Watch ContentView
+            ContentView() // This will be your main iOS view
+                .modelContainer(sharedModelContainer)
         }
-        .modelContainer(sharedModelContainer)
     }
 }

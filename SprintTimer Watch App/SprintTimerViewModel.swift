@@ -3,24 +3,103 @@ import CoreMotion
 import CoreLocation
 import HealthKit
 import SwiftData
+import Combine
 
 class SprintTimerViewModel: NSObject, ObservableObject {
     // Timer Properties
     @Published var elapsedTime: TimeInterval = 0
     @Published var isRunning = false
     @Published var isWaitingForMotion = false
+    @Published var isInCountdown = false
+    @Published var countdownValue = 0
     @Published var isPaused = false
     
     private var pausedTime: TimeInterval = 0
+    private var countdownTimer: Timer?
     
-    // Settings
-    @Published var useGPS = true
-    @Published var useHealthKit = true
-    @Published var trackWeather = true
-    @Published var trackAltitude = true
-    @Published var useMotionStart = false
-    @Published var saveTapTime = true
-    @Published var saveGPSTime = false
+    // Settings - Synced via App Group
+    private let userDefaults = UserDefaults(suiteName: "group.com.yourname.sprinttimer")!
+    
+    var useGPS: Bool {
+        get { userDefaults.bool(forKey: "useGPS") }
+        set {
+            userDefaults.set(newValue, forKey: "useGPS")
+            objectWillChange.send()
+        }
+    }
+    
+    var useHealthKit: Bool {
+        get { userDefaults.bool(forKey: "useHealthKit") }
+        set {
+            userDefaults.set(newValue, forKey: "useHealthKit")
+            objectWillChange.send()
+        }
+    }
+    
+    var trackWeather: Bool {
+        get { userDefaults.bool(forKey: "trackWeather") }
+        set {
+            userDefaults.set(newValue, forKey: "trackWeather")
+            objectWillChange.send()
+        }
+    }
+    
+    var trackAltitude: Bool {
+        get { userDefaults.bool(forKey: "trackAltitude") }
+        set {
+            userDefaults.set(newValue, forKey: "trackAltitude")
+            objectWillChange.send()
+        }
+    }
+    
+    var useMotionStart: Bool {
+        get { userDefaults.bool(forKey: "useMotionStart") }
+        set {
+            userDefaults.set(newValue, forKey: "useMotionStart")
+            objectWillChange.send()
+        }
+    }
+    
+    var useCountdown: Bool {
+        get { userDefaults.bool(forKey: "useCountdown") }
+        set {
+            userDefaults.set(newValue, forKey: "useCountdown")
+            objectWillChange.send()
+        }
+    }
+    
+    var countdownTime: Int {
+        get {
+            let value = userDefaults.integer(forKey: "countdownTime")
+            return value > 0 ? value : 10
+        }
+        set {
+            userDefaults.set(newValue, forKey: "countdownTime")
+            objectWillChange.send()
+        }
+    }
+    
+    var saveTapTime: Bool {
+        get {
+            // Default to true if not set
+            if userDefaults.object(forKey: "saveTapTime") == nil {
+                return true
+            }
+            return userDefaults.bool(forKey: "saveTapTime")
+        }
+        set {
+            userDefaults.set(newValue, forKey: "saveTapTime")
+            objectWillChange.send()
+        }
+    }
+    
+    var saveGPSTime: Bool {
+        get { userDefaults.bool(forKey: "saveGPSTime") }
+        set {
+            userDefaults.set(newValue, forKey: "saveGPSTime")
+            objectWillChange.send()
+        }
+    }
     
     // Run Data
     @Published var selectedDistance = 100
@@ -55,15 +134,82 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         setupMotionDetection()
         requestPermissions()
         setupLocationManager()
+        
+        // Set default values if not already set
+        if userDefaults.object(forKey: "useGPS") == nil {
+            userDefaults.set(true, forKey: "useGPS")
+        }
+        if userDefaults.object(forKey: "useHealthKit") == nil {
+            userDefaults.set(true, forKey: "useHealthKit")
+        }
+        if userDefaults.object(forKey: "trackWeather") == nil {
+            userDefaults.set(true, forKey: "trackWeather")
+        }
+        if userDefaults.object(forKey: "trackAltitude") == nil {
+            userDefaults.set(true, forKey: "trackAltitude")
+        }
+        if userDefaults.object(forKey: "saveTapTime") == nil {
+            userDefaults.set(true, forKey: "saveTapTime")
+        }
     }
     
     func startRun() {
-        if useMotionStart {
+        if useCountdown {
+            startCountdown()
+        } else if useMotionStart {
             isWaitingForMotion = true
             startMotionDetection()
         } else {
             beginTiming()
         }
+    }
+    
+    private func startCountdown() {
+        isInCountdown = true
+        countdownValue = countdownTime
+        
+        // Play initial beep
+        playCountdownSound(isGo: false)
+        
+        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            
+            self.countdownValue -= 1
+            
+            if self.countdownValue == 3 {
+                // "On your mark" beep
+                self.playCountdownSound(isGo: false)
+            } else if self.countdownValue == 2 {
+                // "Get set" beep
+                self.playCountdownSound(isGo: false)
+            } else if self.countdownValue == 0 {
+                // "Go" beep with vibration
+                self.playCountdownSound(isGo: true)
+                self.countdownTimer?.invalidate()
+                self.isInCountdown = false
+                self.beginTiming()
+            }
+        }
+    }
+    
+    private func playCountdownSound(isGo: Bool) {
+        #if os(watchOS)
+        import WatchKit
+        if isGo {
+            WKInterfaceDevice.current().play(.start)
+        } else {
+            WKInterfaceDevice.current().play(.click)
+        }
+        #else
+        // iOS haptic feedback
+        if isGo {
+            let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
+            impactFeedback.impactOccurred()
+        } else {
+            let selectionFeedback = UISelectionFeedbackGenerator()
+            selectionFeedback.selectionChanged()
+        }
+        #endif
     }
     
     func stopRun(modelContext: ModelContext) -> (isOutlier: Bool, reason: String) {
@@ -101,10 +247,14 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         elapsedTime = 0
         isRunning = false
         isWaitingForMotion = false
+        isInCountdown = false
         isPaused = false
         pausedTime = 0
+        countdownValue = 0
         timer?.invalidate()
+        countdownTimer?.invalidate()
         timer = nil
+        countdownTimer = nil
         currentRunNotes = "" // Clear run-specific notes
         if useGPS {
             locationManager.stopUpdatingLocation()
@@ -115,6 +265,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         startTime = Date()
         isRunning = true
         isWaitingForMotion = false
+        isInCountdown = false
         isPaused = false
         pausedTime = 0
         
