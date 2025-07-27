@@ -8,6 +8,7 @@ final class Run {
     var distance: Int
     var elapsedTime: TimeInterval
     var notes: String
+    var dayNotes: String // New field for daily notes
     
     // GPS Data
     var actualDistance: Double?
@@ -29,12 +30,13 @@ final class Run {
     var humidity: Double?
     var pressure: Double?
     
-    init(distance: Int, elapsedTime: TimeInterval, notes: String = "") {
+    init(distance: Int, elapsedTime: TimeInterval, notes: String = "", dayNotes: String = "") {
         self.id = UUID()
         self.date = Date()
         self.distance = distance
         self.elapsedTime = elapsedTime
         self.notes = notes
+        self.dayNotes = dayNotes
     }
     
     var formattedTime: String {

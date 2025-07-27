@@ -2,7 +2,6 @@ import SwiftUI
 import SwiftData
 
 struct HistoryView: View {
-    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Run.date, order: .reverse) private var runs: [Run]
     @Environment(\.dismiss) var dismiss
     @State private var selectedDate: Date?
@@ -55,6 +54,9 @@ struct HistoryView: View {
                         .listStyle(CarouselListStyle())
                     }
                 }
+                .onAppear {
+                    print("Watch History: \(runs.count) runs loaded")
+                }
             } else {
                 // Day Detail View
                 DayDetailView(
@@ -96,7 +98,6 @@ struct DayDetailView: View {
     let date: Date
     let runs: [Run]
     let onBack: () -> Void
-    @Environment(\.modelContext) private var modelContext
     
     var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
@@ -185,7 +186,7 @@ struct DayDetailView: View {
     private func deleteRuns(offsets: IndexSet) {
         withAnimation {
             for index in offsets {
-                modelContext.delete(runs[index])
+                DataManager.shared.deleteRun(runs[index])
             }
         }
     }

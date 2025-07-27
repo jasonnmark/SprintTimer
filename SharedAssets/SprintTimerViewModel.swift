@@ -8,6 +8,7 @@ import Combine
 import WatchKit
 #endif
 
+@MainActor
 class SprintTimerViewModel: NSObject, ObservableObject {
     // Timer Properties
     @Published var elapsedTime: TimeInterval = 0
@@ -20,89 +21,8 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     private var pausedTime: TimeInterval = 0
     private var countdownTimer: Timer?
     
-    // Settings - Synced via App Group
-    private let userDefaults = UserDefaults(suiteName: "group.com.JasonMark.SprintTimer")!
-    
-    var useGPS: Bool {
-        get { userDefaults.bool(forKey: "useGPS") }
-        set {
-            userDefaults.set(newValue, forKey: "useGPS")
-            objectWillChange.send()
-        }
-    }
-    
-    var useHealthKit: Bool {
-        get { userDefaults.bool(forKey: "useHealthKit") }
-        set {
-            userDefaults.set(newValue, forKey: "useHealthKit")
-            objectWillChange.send()
-        }
-    }
-    
-    var trackWeather: Bool {
-        get { userDefaults.bool(forKey: "trackWeather") }
-        set {
-            userDefaults.set(newValue, forKey: "trackWeather")
-            objectWillChange.send()
-        }
-    }
-    
-    var trackAltitude: Bool {
-        get { userDefaults.bool(forKey: "trackAltitude") }
-        set {
-            userDefaults.set(newValue, forKey: "trackAltitude")
-            objectWillChange.send()
-        }
-    }
-    
-    var useMotionStart: Bool {
-        get { userDefaults.bool(forKey: "useMotionStart") }
-        set {
-            userDefaults.set(newValue, forKey: "useMotionStart")
-            objectWillChange.send()
-        }
-    }
-    
-    var useCountdown: Bool {
-        get { userDefaults.bool(forKey: "useCountdown") }
-        set {
-            userDefaults.set(newValue, forKey: "useCountdown")
-            objectWillChange.send()
-        }
-    }
-    
-    var countdownTime: Int {
-        get {
-            let value = userDefaults.integer(forKey: "countdownTime")
-            return value > 0 ? value : 10
-        }
-        set {
-            userDefaults.set(newValue, forKey: "countdownTime")
-            objectWillChange.send()
-        }
-    }
-    
-    var saveTapTime: Bool {
-        get {
-            // Default to true if not set
-            if userDefaults.object(forKey: "saveTapTime") == nil {
-                return true
-            }
-            return userDefaults.bool(forKey: "saveTapTime")
-        }
-        set {
-            userDefaults.set(newValue, forKey: "saveTapTime")
-            objectWillChange.send()
-        }
-    }
-    
-    var saveGPSTime: Bool {
-        get { userDefaults.bool(forKey: "saveGPSTime") }
-        set {
-            userDefaults.set(newValue, forKey: "saveGPSTime")
-            objectWillChange.send()
-        }
-    }
+    // Data Manager
+    private let dataManager = DataManager.shared
     
     // Run Data
     @Published var selectedDistance = 100
@@ -137,39 +57,28 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         setupMotionDetection()
         requestPermissions()
         setupLocationManager()
-        
-        // Set default values if not already set
-        if userDefaults.object(forKey: "useGPS") == nil {
-            userDefaults.set(true, forKey: "useGPS")
-        }
-        if userDefaults.object(forKey: "useHealthKit") == nil {
-            userDefaults.set(true, forKey: "useHealthKit")
-        }
-        if userDefaults.object(forKey: "trackWeather") == nil {
-            userDefaults.set(true, forKey: "trackWeather")
-        }
-        if userDefaults.object(forKey: "trackAltitude") == nil {
-            userDefaults.set(true, forKey: "trackAltitude")
-        }
-        if userDefaults.object(forKey: "saveTapTime") == nil {
-            userDefaults.set(true, forKey: "saveTapTime")
-        }
     }
     
     func startRun() {
-        if useCountdown {
+        // Debug logging
+        print("=== Starting Run ===")
+        print("Start Mode: \(dataManager.startMode.rawValue)")
+        print("==================")
+        
+        switch dataManager.startMode {
+        case .countdown:
             startCountdown()
-        } else if useMotionStart {
+        case .motion:
             isWaitingForMotion = true
             startMotionDetection()
-        } else {
+        case .tap:
             beginTiming()
         }
     }
     
     private func startCountdown() {
         isInCountdown = true
-        countdownValue = countdownTime
+        countdownValue = dataManager.countdownTime
         
         // Play initial beep
         playCountdownSound(isGo: false)
@@ -177,20 +86,22 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             
-            self.countdownValue -= 1
-            
-            if self.countdownValue == 3 {
-                // "On your mark" beep
-                self.playCountdownSound(isGo: false)
-            } else if self.countdownValue == 2 {
-                // "Get set" beep
-                self.playCountdownSound(isGo: false)
-            } else if self.countdownValue == 0 {
-                // "Go" beep with vibration
-                self.playCountdownSound(isGo: true)
-                self.countdownTimer?.invalidate()
-                self.isInCountdown = false
-                self.beginTiming()
+            Task { @MainActor in
+                self.countdownValue -= 1
+                
+                if self.countdownValue == 3 {
+                    // "On your mark" beep
+                    self.playCountdownSound(isGo: false)
+                } else if self.countdownValue == 2 {
+                    // "Get set" beep
+                    self.playCountdownSound(isGo: false)
+                } else if self.countdownValue == 0 {
+                    // "Go" beep with vibration
+                    self.playCountdownSound(isGo: true)
+                    self.countdownTimer?.invalidate()
+                    self.isInCountdown = false
+                    self.beginTiming()
+                }
             }
         }
     }
@@ -258,7 +169,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         timer = nil
         countdownTimer = nil
         currentRunNotes = "" // Clear run-specific notes
-        if useGPS {
+        if dataManager.useGPS {
             locationManager.stopUpdatingLocation()
         }
     }
@@ -272,13 +183,16 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         pausedTime = 0
         
         // Start location tracking if enabled
-        if useGPS {
+        if dataManager.useGPS {
             locationManager.startUpdatingLocation()
         }
         
         timer = Timer.scheduledTimer(withTimeInterval: 0.001, repeats: true) { [weak self] _ in
-            guard let self = self, let startTime = self.startTime else { return }
-            self.elapsedTime = Date().timeIntervalSince(startTime)
+            guard let self = self else { return }
+            Task { @MainActor in
+                guard let startTime = self.startTime else { return }
+                self.elapsedTime = Date().timeIntervalSince(startTime)
+            }
         }
     }
     
@@ -286,7 +200,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         motionManager.accelerometerUpdateInterval = 0.01
     }
     
-    private func setupLocationManager() {
+    nonisolated private func setupLocationManager() {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = 1.0
@@ -296,20 +210,24 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         guard motionManager.isAccelerometerAvailable else { return }
         
         motionManager.startAccelerometerUpdates(to: .main) { [weak self] data, error in
-            guard let self = self, let data = data else { return }
+            guard let data = data else { return }
             
-            let acceleration = sqrt(pow(data.acceleration.x, 2) +
-                                  pow(data.acceleration.y, 2) +
-                                  pow(data.acceleration.z, 2))
-            
-            if acceleration > 2.5 && self.isWaitingForMotion {
-                self.motionManager.stopAccelerometerUpdates()
-                self.beginTiming()
+            Task { @MainActor in
+                guard let self = self else { return }
+                
+                let acceleration = sqrt(pow(data.acceleration.x, 2) +
+                                      pow(data.acceleration.y, 2) +
+                                      pow(data.acceleration.z, 2))
+                
+                if acceleration > 2.5 && self.isWaitingForMotion {
+                    self.motionManager.stopAccelerometerUpdates()
+                    self.beginTiming()
+                }
             }
         }
     }
     
-    private func requestPermissions() {
+    nonisolated private func requestPermissions() {
         // Location permissions
         locationManager.requestWhenInUseAuthorization()
         
@@ -347,8 +265,11 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             startTime = Date().addingTimeInterval(-pausedTime)
             
             timer = Timer.scheduledTimer(withTimeInterval: 0.001, repeats: true) { [weak self] _ in
-                guard let self = self, let startTime = self.startTime else { return }
-                self.elapsedTime = Date().timeIntervalSince(startTime)
+                guard let self = self else { return }
+                Task { @MainActor in
+                    guard let startTime = self.startTime else { return }
+                    self.elapsedTime = Date().timeIntervalSince(startTime)
+                }
             }
         }
     }
@@ -380,30 +301,16 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         run.startHeartRate = startHeartRate
         run.endHeartRate = endHeartRate
         
-        // Save to SwiftData
-        modelContext.insert(run)
-        print("DEBUG: Inserted run with ID: \(run.id)")
-        
-        do {
-            try modelContext.save()
-            print("✅ Run saved successfully: \(selectedDistance)m in \(formattedTime)")
-            
-            // Verify save
-            let descriptor = FetchDescriptor<Run>()
-            let allRuns = try modelContext.fetch(descriptor)
-            print("DEBUG: Total runs in database after save: \(allRuns.count)")
-        } catch {
-            print("❌ Failed to save run: \(error)")
-            print("Error details: \(error.localizedDescription)")
-        }
+        // Use DataManager to save
+        dataManager.saveRun(run)
         
         // Stop location updates
-        if useGPS {
+        if dataManager.useGPS {
             locationManager.stopUpdatingLocation()
         }
     }
     
-    // Outlier detection - NO PREDICATE MACRO
+    // Outlier detection
     func isRunOutlier(modelContext: ModelContext) -> (isOutlier: Bool, reason: String) {
         // Get all runs and filter manually
         let oneMonthAgo = Calendar.current.date(byAdding: .month, value: -1, to: Date())!
@@ -444,7 +351,9 @@ class SprintTimerViewModel: NSObject, ObservableObject {
 
 // Location Manager Delegate
 extension SprintTimerViewModel: CLLocationManagerDelegate {
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        currentLocation = locations.last
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        Task { @MainActor in
+            currentLocation = locations.last
+        }
     }
 }

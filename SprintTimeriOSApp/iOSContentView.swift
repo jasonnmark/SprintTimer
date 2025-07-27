@@ -67,7 +67,7 @@ struct SimpleHomeView: View {
                             }
                         }
                         .padding()
-                        .background(Color.gray.opacity(0.1))
+                        .background(Color.white.opacity(0.1))
                         .cornerRadius(10)
                     }
                 }
@@ -112,6 +112,13 @@ struct SimpleHomeView: View {
                 Spacer()
             }
             .navigationBarHidden(true)
+            .onAppear {
+                print("DEBUG: iPhone app runs count: \(runs.count)")
+                if let groupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.JasonMark.SprintTimer") {
+                    let dbURL = groupURL.appendingPathComponent("SprintTimer.sqlite")
+                    print("DEBUG: Database exists: \(FileManager.default.fileExists(atPath: dbURL.path))")
+                }
+            }
         }
     }
     

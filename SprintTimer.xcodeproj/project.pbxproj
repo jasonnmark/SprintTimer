@@ -72,22 +72,29 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		96FB658C2E35614400C11C25 /* Exceptions for "SprintTimer" folder in "SprintTimer Watch App" target */ = {
+		964F074E2E368489002CC21A /* Exceptions for "SharedAssets" folder in "SprintTimer" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				SprintTimerViewModel.swift,
+			);
+			target = 96194DD12E3546E1008DA54F /* SprintTimer */;
+		};
+		964F074F2E368489002CC21A /* Exceptions for "SharedAssets" folder in "SprintTimer Watch App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				DailyNotesManager.swift,
+				DataManager.swift,
 				RunModel.swift,
+				SprintTimerViewModel.swift,
 			);
 			target = 96194DF42E3546E1008DA54F /* SprintTimer Watch App */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		96194DD42E3546E1008DA54F /* SprintTimer */ = {
+		96194DD42E3546E1008DA54F /* SprintTimeriOSApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				96FB658C2E35614400C11C25 /* Exceptions for "SprintTimer" folder in "SprintTimer Watch App" target */,
-			);
-			path = SprintTimer;
+			path = SprintTimeriOSApp;
 			sourceTree = "<group>";
 		};
 		96194DE22E3546E1008DA54F /* SprintTimerTests */ = {
@@ -100,9 +107,9 @@
 			path = SprintTimerUITests;
 			sourceTree = "<group>";
 		};
-		96194DF92E3546E1008DA54F /* SprintTimer Watch App */ = {
+		96194DF92E3546E1008DA54F /* SprintTimerWatchApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "SprintTimer Watch App";
+			path = SprintTimerWatchApp;
 			sourceTree = "<group>";
 		};
 		96194E072E3546E2008DA54F /* SprintTimer Watch AppTests */ = {
@@ -113,6 +120,15 @@
 		96194E112E3546E2008DA54F /* SprintTimer Watch AppUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "SprintTimer Watch AppUITests";
+			sourceTree = "<group>";
+		};
+		964F074D2E36847E002CC21A /* SharedAssets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				964F074E2E368489002CC21A /* Exceptions for "SharedAssets" folder in "SprintTimer" target */,
+				964F074F2E368489002CC21A /* Exceptions for "SharedAssets" folder in "SprintTimer Watch App" target */,
+			);
+			path = SharedAssets;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -166,13 +182,14 @@
 		96194DC92E3546E0008DA54F = {
 			isa = PBXGroup;
 			children = (
-				96194DD42E3546E1008DA54F /* SprintTimer */,
+				96194DD42E3546E1008DA54F /* SprintTimeriOSApp */,
 				96194DE22E3546E1008DA54F /* SprintTimerTests */,
 				96194DEC2E3546E1008DA54F /* SprintTimerUITests */,
-				96194DF92E3546E1008DA54F /* SprintTimer Watch App */,
+				96194DF92E3546E1008DA54F /* SprintTimerWatchApp */,
 				96194E072E3546E2008DA54F /* SprintTimer Watch AppTests */,
 				96194E112E3546E2008DA54F /* SprintTimer Watch AppUITests */,
 				96194DD32E3546E1008DA54F /* Products */,
+				964F074D2E36847E002CC21A /* SharedAssets */,
 			);
 			sourceTree = "<group>";
 		};
@@ -207,7 +224,8 @@
 				96194DF82E3546E1008DA54F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				96194DD42E3546E1008DA54F /* SprintTimer */,
+				96194DD42E3546E1008DA54F /* SprintTimeriOSApp */,
+				964F074D2E36847E002CC21A /* SharedAssets */,
 			);
 			name = SprintTimer;
 			packageProductDependencies = (
@@ -275,7 +293,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				96194DF92E3546E1008DA54F /* SprintTimer Watch App */,
+				96194DF92E3546E1008DA54F /* SprintTimerWatchApp */,
 			);
 			name = "SprintTimer Watch App";
 			packageProductDependencies = (
@@ -626,7 +644,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "SprintTimer Watch App/SprintTimer Watch App.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "SprintTimerWatchApp/SprintTimer Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 936M69ZLDQ;
@@ -660,7 +678,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "SprintTimer Watch App/SprintTimer Watch App.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "SprintTimerWatchApp/SprintTimer Watch App.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 936M69ZLDQ;
@@ -695,7 +713,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = SprintTimer/SprintTimer.entitlements;
+				CODE_SIGN_ENTITLEMENTS = SprintTimeriOSApp/SprintTimer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 936M69ZLDQ;
@@ -731,7 +749,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = SprintTimer/SprintTimer.entitlements;
+				CODE_SIGN_ENTITLEMENTS = SprintTimeriOSApp/SprintTimer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 936M69ZLDQ;

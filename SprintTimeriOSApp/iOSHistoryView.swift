@@ -2,22 +2,39 @@ import SwiftUI
 import SwiftData
 
 struct iOSHistoryView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Run.date, order: .reverse) private var runs: [Run]
+    @Query(sort: \Run.date, order: .reverse) private var allRuns: [Run]
+    @StateObject private var dailyNotesManager = DailyNotesManager.shared
     @State private var editMode: EditMode = .inactive
     @State private var selectedRuns = Set<UUID>()
     @State private var selectedDays = Set<Date>()
     @State private var showingNoteEditor = false
     @State private var noteType: NoteType = .run
     @State private var selectedItem: Any?
+    @Environment(\.scenePhase) var scenePhase
+    @State private var lastRefresh = Date()
+    @State private var selectedDistance: Int = 0 // 0 = All runs
     
     enum NoteType {
         case run, day
     }
     
+    // Get unique distances from runs
+    var availableDistances: [Int] {
+        let distances = Set(allRuns.map { $0.distance }).sorted()
+        return distances
+    }
+    
+    // Filter runs based on selected distance
+    var filteredRuns: [Run] {
+        if selectedDistance == 0 {
+            return allRuns
+        }
+        return allRuns.filter { $0.distance == selectedDistance }
+    }
+    
     // Group runs by day
     var runsByDay: [(date: Date, runs: [Run])] {
-        let grouped = Dictionary(grouping: runs) { run in
+        let grouped = Dictionary(grouping: filteredRuns) { run in
             Calendar.current.startOfDay(for: run.date)
         }
         return grouped.map { (date: $0.key, runs: $0.value) }
@@ -26,41 +43,65 @@ struct iOSHistoryView: View {
     
     var body: some View {
         NavigationView {
-            List {
-                ForEach(runsByDay, id: \.date) { dayData in
-                    Section(header: DayHeaderView(
-                        date: dayData.date,
-                        runCount: dayData.runs.count,
-                        isSelected: selectedDays.contains(dayData.date),
-                        editMode: editMode,
-                        onToggle: {
-                            toggleDaySelection(dayData.date, runs: dayData.runs)
-                        },
-                        onNotesTapped: {
-                            noteType = .day
-                            selectedItem = dayData.date
-                            showingNoteEditor = true
+            VStack(spacing: 0) {
+                // Filter Picker
+                HStack {
+                    Text("Filter:")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                    
+                    Picker("Distance", selection: $selectedDistance) {
+                        Text("All Runs").tag(0)
+                        ForEach(availableDistances, id: \.self) { distance in
+                            Text("\(distance)m").tag(distance)
                         }
-                    )) {
-                        ForEach(dayData.runs) { run in
-                            RunRowView(
-                                run: run,
-                                isSelected: selectedRuns.contains(run.id),
-                                editMode: editMode,
-                                onToggle: {
-                                    toggleRunSelection(run.id)
-                                },
-                                onNotesTapped: {
-                                    noteType = .run
-                                    selectedItem = run
-                                    showingNoteEditor = true
-                                }
-                            )
+                    }
+                    .pickerStyle(MenuPickerStyle())
+                    .accentColor(.blue)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
+                .background(Color(UIColor.systemGroupedBackground))
+                
+                List {
+                    ForEach(runsByDay, id: \.date) { dayData in
+                        Section(header: DayHeaderView(
+                            date: dayData.date,
+                            runCount: dayData.runs.count,
+                            isSelected: selectedDays.contains(dayData.date),
+                            editMode: editMode,
+                            hasDayNote: dailyNotesManager.hasNote(for: dayData.date),
+                            onToggle: {
+                                toggleDaySelection(dayData.date, runs: dayData.runs)
+                            },
+                            onNotesTapped: {
+                                noteType = .day
+                                selectedItem = dayData.date
+                                showingNoteEditor = true
+                            }
+                        )) {
+                            ForEach(dayData.runs) { run in
+                                RunRowView(
+                                    run: run,
+                                    isSelected: selectedRuns.contains(run.id),
+                                    editMode: editMode,
+                                    onToggle: {
+                                        toggleRunSelection(run.id)
+                                    },
+                                    onNotesTapped: {
+                                        noteType = .run
+                                        selectedItem = run
+                                        showingNoteEditor = true
+                                    }
+                                )
+                            }
                         }
                     }
                 }
+                .listStyle(InsetGroupedListStyle())
             }
-            .listStyle(InsetGroupedListStyle())
             .navigationTitle("History")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -87,10 +128,15 @@ struct iOSHistoryView: View {
                 if noteType == .run, let run = selectedItem as? Run {
                     RunNoteEditorView(run: run)
                 } else if noteType == .day, let date = selectedItem as? Date {
-                    DayNoteEditorView(date: date, runs: runs.filter {
-                        Calendar.current.isDate($0.date, inSameDayAs: date)
-                    })
+                    DayNoteEditorView(date: date)
                 }
+            }
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .active {
+                // Force a refresh when app becomes active
+                lastRefresh = Date()
+                print("History view refreshing...")
             }
         }
     }
@@ -121,14 +167,8 @@ struct iOSHistoryView: View {
     
     private func deleteSelected() {
         withAnimation {
-            for run in runs where selectedRuns.contains(run.id) {
-                modelContext.delete(run)
-            }
-            
-            do {
-                try modelContext.save()
-            } catch {
-                print("Error deleting runs: \(error)")
+            for run in allRuns where selectedRuns.contains(run.id) {
+                DataManager.shared.deleteRun(run)
             }
             
             selectedRuns.removeAll()
@@ -143,26 +183,9 @@ struct DayHeaderView: View {
     let runCount: Int
     let isSelected: Bool
     let editMode: EditMode
+    let hasDayNote: Bool
     let onToggle: () -> Void
     let onNotesTapped: () -> Void
-    
-    @Query private var runs: [Run]
-    
-    private var dayNotes: String? {
-        // Check if any run from this day has day notes
-        let dayRuns = runs.filter {
-            Calendar.current.isDate($0.date, inSameDayAs: date)
-        }
-        
-        // Look for day notes in run notes (before the | separator)
-        for run in dayRuns {
-            let components = run.notes.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
-            if components.count > 0 && !components[0].isEmpty {
-                return components[0]
-            }
-        }
-        return nil
-    }
     
     var body: some View {
         HStack {
@@ -185,8 +208,10 @@ struct DayHeaderView: View {
             Spacer()
             
             Button(action: onNotesTapped) {
-                Image(systemName: dayNotes != nil ? "note.text" : "note.text.badge.plus")
-                    .foregroundColor(dayNotes != nil ? .blue : .gray)
+                Image(systemName: hasDayNote ? "note.text" : "note.text.badge.plus")
+                    .font(.system(size: 20)) // Fixed size for consistency
+                    .foregroundColor(hasDayNote ? .blue : .gray)
+                    .frame(width: 30, height: 30) // Fixed frame
             }
             .buttonStyle(PlainButtonStyle())
         }
@@ -201,15 +226,8 @@ struct RunRowView: View {
     let onToggle: () -> Void
     let onNotesTapped: () -> Void
     
-    private var runSpecificNotes: String? {
-        let components = run.notes.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
-        if components.count > 1 && !components[1].isEmpty {
-            return components[1]
-        } else if components.count == 1 && !components[0].isEmpty {
-            // If there's only one component, it might be run-specific notes
-            return components[0]
-        }
-        return nil
+    private var hasRunNotes: Bool {
+        !run.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
     
     var body: some View {
@@ -259,8 +277,10 @@ struct RunRowView: View {
                     .foregroundColor(.gray)
                 
                 Button(action: onNotesTapped) {
-                    Image(systemName: runSpecificNotes != nil ? "note.text" : "note.text.badge.plus")
-                        .foregroundColor(runSpecificNotes != nil ? .blue : .gray)
+                    Image(systemName: hasRunNotes ? "note.text" : "note.text.badge.plus")
+                        .font(.system(size: 20)) // Fixed size for consistency
+                        .foregroundColor(hasRunNotes ? .blue : .gray)
+                        .frame(width: 30, height: 30) // Fixed frame
                 }
                 .buttonStyle(PlainButtonStyle())
             }
@@ -272,8 +292,8 @@ struct RunRowView: View {
 struct RunNoteEditorView: View {
     let run: Run
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
     @State private var noteText = ""
+    @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
         NavigationView {
@@ -299,49 +319,35 @@ struct RunNoteEditorView: View {
                 Section(header: Text("Notes")) {
                     TextEditor(text: $noteText)
                         .frame(minHeight: 100)
+                        .focused($isTextFieldFocused)
                 }
             }
             .navigationTitle("Run Notes")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         saveNotes()
                     }
+                    .fontWeight(.medium)
                 }
             }
             .onAppear {
-                // Extract run-specific notes
-                let components = run.notes.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
-                if components.count > 1 {
-                    noteText = components[1]
-                } else if components.count == 1 {
-                    noteText = components[0]
+                noteText = run.notes
+                
+                // Focus the text field after a short delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isTextFieldFocused = true
                 }
             }
         }
     }
     
     private func saveNotes() {
-        // Preserve day notes if they exist
-        let components = run.notes.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
-        let dayNotes = components.count > 0 ? components[0] : ""
-        
-        if !dayNotes.isEmpty && !noteText.isEmpty {
-            run.notes = "\(dayNotes) | \(noteText)"
-        } else if !noteText.isEmpty {
-            run.notes = noteText
-        } else {
-            run.notes = dayNotes
-        }
+        run.notes = noteText
         
         do {
-            try modelContext.save()
+            try DataManager.shared.modelContainer.mainContext.save()
             dismiss()
         } catch {
             print("Error saving notes: \(error)")
@@ -351,10 +357,10 @@ struct RunNoteEditorView: View {
 
 struct DayNoteEditorView: View {
     let date: Date
-    let runs: [Run]
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
+    @StateObject private var dailyNotesManager = DailyNotesManager.shared
     @State private var noteText = ""
+    @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
         NavigationView {
@@ -365,20 +371,16 @@ struct DayNoteEditorView: View {
                         Spacer()
                         Text(date, style: .date)
                     }
-                    HStack {
-                        Text("Total Runs:")
-                        Spacer()
-                        Text("\(runs.count)")
-                    }
                 }
                 
                 Section(header: Text("Day Notes")) {
                     TextEditor(text: $noteText)
                         .frame(minHeight: 100)
+                        .focused($isTextFieldFocused)
                 }
                 
                 Section {
-                    Text("These notes will be applied to all runs on this day")
+                    Text("Day notes are separate from individual run notes")
                         .font(.caption)
                         .foregroundColor(.gray)
                 }
@@ -386,49 +388,26 @@ struct DayNoteEditorView: View {
             .navigationTitle("Day Notes")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         saveDayNotes()
                     }
+                    .fontWeight(.medium)
                 }
             }
             .onAppear {
-                // Load existing day notes if any
-                if let firstRun = runs.first {
-                    let components = firstRun.notes.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
-                    if components.count > 0 {
-                        noteText = components[0]
-                    }
+                noteText = dailyNotesManager.getNote(for: date)
+                
+                // Focus the text field after a short delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isTextFieldFocused = true
                 }
             }
         }
     }
     
     private func saveDayNotes() {
-        // Update all runs for this day
-        for run in runs {
-            let components = run.notes.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
-            let runNotes = components.count > 1 ? components[1] : ""
-            
-            if !noteText.isEmpty && !runNotes.isEmpty {
-                run.notes = "\(noteText) | \(runNotes)"
-            } else if !noteText.isEmpty {
-                run.notes = noteText
-            } else {
-                run.notes = runNotes
-            }
-        }
-        
-        do {
-            try modelContext.save()
-            dismiss()
-        } catch {
-            print("Error saving day notes: \(error)")
-        }
+        dailyNotesManager.setNote(noteText, for: date)
+        dismiss()
     }
 }

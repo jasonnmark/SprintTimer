@@ -3,7 +3,6 @@ import WatchKit
 
 struct TimerView: View {
     @ObservedObject var viewModel: SprintTimerViewModel
-    @Environment(\.modelContext) private var modelContext
     @State private var showingOutlierAlert = false
     @State private var outlierReason = ""
     @State private var showingPauseMenu = false
@@ -16,7 +15,7 @@ struct TimerView: View {
     var body: some View {
         ZStack {
             // Main timer content
-            if !viewModel.isRunning && !viewModel.isWaitingForMotion {
+            if !viewModel.isRunning && !viewModel.isWaitingForMotion && !viewModel.isInCountdown {
                 // Start Button - Full Screen
                 ZStack {
                     Color.green
@@ -42,13 +41,25 @@ struct TimerView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.orange)
+            } else if viewModel.isInCountdown {
+                // Countdown - Full Screen
+                VStack {
+                    Text("\(viewModel.countdownValue)")
+                        .font(.system(size: 80, weight: .bold))
+                        .foregroundColor(.white)
+                    Text("Get Ready")
+                        .font(.system(size: 20))
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.orange)
             } else if viewModel.isRunning {
                 // Timer Running - Full Screen
                 Button(action: {
                     // Quick tap on timer - stop and check for outlier
                     // Only allow tap if not tracking pause gesture
                     if !isTrackingPauseGesture {
-                        let outlierCheck = viewModel.stopRun(modelContext: modelContext)
+                        let outlierCheck = viewModel.stopRun(modelContext: DataManager.shared.modelContainer.mainContext)
                         if outlierCheck.isOutlier {
                             outlierReason = outlierCheck.reason
                             showingOutlierAlert = true
@@ -79,54 +90,58 @@ struct TimerView: View {
             }
         }
         .overlay(
-            // Pause button overlay - always visible
-            VStack {
-                HStack {
-                    // Pause button with hold detection
-                    ZStack {
-                        // Background
-                        Circle()
-                            .fill(Color.black.opacity(0.6))
-                            .frame(width: 50, height: 50)
-                        
-                        // Progress ring - only show when actively pressing
-                        if isPauseButtonPressed {
-                            Circle()
-                                .trim(from: 0, to: pauseHoldProgress)
-                                .stroke(Color.white, lineWidth: 3)
-                                .frame(width: 46, height: 46)
-                                .rotationEffect(.degrees(-90))
-                        }
-                        
-                        // Icon
-                        Image(systemName: "pause.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(.white)
-                    }
-                    .scaleEffect(isPauseButtonPressed ? 1.2 : 1.0)
-                    .animation(.easeInOut(duration: 0.1), value: isPauseButtonPressed)
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                if !isPauseButtonPressed && !isTrackingPauseGesture {
-                                    isTrackingPauseGesture = true
-                                    handlePausePress(true)
+            // Pause button overlay - only visible during run
+            Group {
+                if viewModel.isRunning || viewModel.isWaitingForMotion {
+                    VStack {
+                        HStack {
+                            // Pause button with hold detection
+                            ZStack {
+                                // Background
+                                Circle()
+                                    .fill(Color.black.opacity(0.6))
+                                    .frame(width: 50, height: 50)
+                                
+                                // Progress ring - only show when actively pressing
+                                if isPauseButtonPressed {
+                                    Circle()
+                                        .trim(from: 0, to: pauseHoldProgress)
+                                        .stroke(Color.white, lineWidth: 3)
+                                        .frame(width: 46, height: 46)
+                                        .rotationEffect(.degrees(-90))
                                 }
+                                
+                                // Icon
+                                Image(systemName: "pause.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.white)
                             }
-                    )
-                    
-                    Spacer()
+                            .scaleEffect(isPauseButtonPressed ? 1.2 : 1.0)
+                            .animation(.easeInOut(duration: 0.1), value: isPauseButtonPressed)
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { _ in
+                                        if !isPauseButtonPressed && !isTrackingPauseGesture {
+                                            isTrackingPauseGesture = true
+                                            handlePausePress(true)
+                                        }
+                                    }
+                            )
+                            
+                            Spacer()
+                        }
+                        .padding()
+                        
+                        Spacer()
+                    }
                 }
-                .padding()
-                
-                Spacer()
             }
         )
         .fullScreenCover(isPresented: $showingOutlierAlert) {
             OutlierAlertView(
                 reason: outlierReason,
                 onKeep: {
-                    viewModel.saveCurrentRun(modelContext: modelContext)
+                    viewModel.saveCurrentRun(modelContext: DataManager.shared.modelContainer.mainContext)
                     viewModel.resetTimer()
                     showingOutlierAlert = false
                 },
@@ -160,7 +175,7 @@ struct TimerView: View {
     private func handlePausePress(_ pressing: Bool) {
         if pressing {
             // Start timer immediately on any press
-            if !viewModel.isRunning && !viewModel.isWaitingForMotion {
+            if !viewModel.isRunning && !viewModel.isWaitingForMotion && !viewModel.isInCountdown {
                 viewModel.startRun()
             }
             

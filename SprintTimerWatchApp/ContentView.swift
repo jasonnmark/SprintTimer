@@ -3,7 +3,6 @@ import SwiftData
 
 struct ContentView: View {
     @StateObject private var viewModel = SprintTimerViewModel()
-    @Environment(\.modelContext) private var modelContext
     @State private var selectedDistance = 100
     @State private var showingSettings = false
     @State private var showingRunner = false
@@ -72,11 +71,10 @@ struct ContentView: View {
             .navigationBarHidden(true)
         }
         .sheet(isPresented: $showingSettings) {
-            SettingsView(viewModel: viewModel)
+            SettingsView()
         }
         .sheet(isPresented: $showingHistory) {
             HistoryView()
-                .environment(\.modelContext, modelContext)
         }
         .fullScreenCover(isPresented: $showingRunner) {
             RunnerView(viewModel: viewModel, isPresented: $showingRunner)
