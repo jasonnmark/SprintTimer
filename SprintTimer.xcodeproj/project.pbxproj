@@ -76,7 +76,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				RunModel.swift,
-				SprintTimerApp.swift,
 			);
 			target = 96194DF42E3546E1008DA54F /* SprintTimer Watch App */;
 		};

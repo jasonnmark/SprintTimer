@@ -4,6 +4,9 @@ import CoreLocation
 import HealthKit
 import SwiftData
 import Combine
+#if os(watchOS)
+import WatchKit
+#endif
 
 class SprintTimerViewModel: NSObject, ObservableObject {
     // Timer Properties
@@ -18,7 +21,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     private var countdownTimer: Timer?
     
     // Settings - Synced via App Group
-    private let userDefaults = UserDefaults(suiteName: "group.com.yourname.sprinttimer")!
+    private let userDefaults = UserDefaults(suiteName: "group.com.JasonMark.SprintTimer")!
     
     var useGPS: Bool {
         get { userDefaults.bool(forKey: "useGPS") }
@@ -194,7 +197,6 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     
     private func playCountdownSound(isGo: Bool) {
         #if os(watchOS)
-        import WatchKit
         if isGo {
             WKInterfaceDevice.current().play(.start)
         } else {

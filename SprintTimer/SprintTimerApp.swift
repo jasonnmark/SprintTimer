@@ -9,9 +9,11 @@ struct SprintTimerApp: App {
         ])
         
         // Use App Group for shared data with Watch
-        let groupURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.com.jasonmark.SprintTimer" // Update with your actual app group ID
-        )!
+        guard let groupURL = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: "group.com.JasonMark.SprintTimer" // UPDATE THIS with your actual app group ID from Xcode
+        ) else {
+            fatalError("App Group container could not be created. Make sure App Groups capability is enabled and the identifier matches exactly.")
+        }
         let databaseURL = groupURL.appendingPathComponent("SprintTimer.sqlite")
         
         let modelConfiguration = ModelConfiguration(
@@ -29,7 +31,7 @@ struct SprintTimerApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView() // This will be your main iOS view
+            iOSContentView() // Changed from ContentView() to iOSContentView()
                 .modelContainer(sharedModelContainer)
         }
     }

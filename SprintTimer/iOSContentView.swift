@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-struct ContentView: View {
+struct iOSContentView: View {
     @State private var selectedTab = 0
     
     var body: some View {

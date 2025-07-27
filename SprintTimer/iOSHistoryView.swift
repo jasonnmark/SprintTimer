@@ -77,7 +77,7 @@ struct iOSHistoryView: View {
                 }
             }
             .environment(\.editMode, $editMode)
-            .onChange(of: editMode) { newValue in
+            .onChange(of: editMode) { oldValue, newValue in
                 if newValue == .inactive {
                     selectedRuns.removeAll()
                     selectedDays.removeAll()
