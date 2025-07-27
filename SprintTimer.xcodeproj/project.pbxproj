@@ -71,9 +71,22 @@
 		96194E0E2E3546E2008DA54F /* SprintTimer Watch AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "SprintTimer Watch AppUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		96FB658C2E35614400C11C25 /* Exceptions for "SprintTimer" folder in "SprintTimer Watch App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				RunModel.swift,
+			);
+			target = 96194DF42E3546E1008DA54F /* SprintTimer Watch App */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		96194DD42E3546E1008DA54F /* SprintTimer */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				96FB658C2E35614400C11C25 /* Exceptions for "SprintTimer" folder in "SprintTimer Watch App" target */,
+			);
 			path = SprintTimer;
 			sourceTree = "<group>";
 		};
@@ -615,9 +628,14 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 936M69ZLDQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SprintTimer;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Sprint Timer needs to read your heart rate and step data";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Sprint Timer needs to save your workout data to Health";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Sprint Timer needs location access to track your running distanc";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Sprint Timer uses motion detection to automatically start timing";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.JasonMark.SprintTimer;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -643,9 +661,14 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 936M69ZLDQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SprintTimer;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Sprint Timer needs to read your heart rate and step data";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Sprint Timer needs to save your workout data to Health";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Sprint Timer needs location access to track your running distanc";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Sprint Timer uses motion detection to automatically start timing";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.JasonMark.SprintTimer;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -672,6 +695,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 936M69ZLDQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SprintTimer;
@@ -692,6 +716,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				TEmp = "";
 			};
 			name = Debug;
 		};
@@ -702,6 +727,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 936M69ZLDQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SprintTimer;
@@ -722,6 +748,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				TEmp = "";
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
@@ -732,6 +759,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 936M69ZLDQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MARKETING_VERSION = 1.0;
@@ -770,6 +798,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 936M69ZLDQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MARKETING_VERSION = 1.0;
@@ -808,6 +837,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 936M69ZLDQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.JasonMark.SprintTimer-Watch-AppTests";
@@ -846,6 +876,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 936M69ZLDQ;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.JasonMark.SprintTimer-Watch-AppUITests";
