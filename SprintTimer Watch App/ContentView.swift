@@ -14,14 +14,17 @@ struct ContentView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 10) {
-                // Distance Selector
-                Picker("Distance", selection: $selectedDistance) {
+                // Distance Selector - Larger with better styling
+                Picker("", selection: $selectedDistance) {
                     ForEach(distances, id: \.self) { distance in
-                        Text("\(distance)m").tag(distance)
+                        Text("\(distance)m")
+                            .tag(distance)
+                            .font(.system(size: 28, weight: .semibold))
                     }
                 }
                 .pickerStyle(WheelPickerStyle())
-                .frame(height: 45)
+                .frame(height: 70)
+                .labelsHidden()
                 
                 // Start Run Button
                 Button(action: {
