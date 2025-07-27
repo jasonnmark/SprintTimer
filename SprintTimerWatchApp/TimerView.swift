@@ -49,7 +49,7 @@ struct TimerView: View {
                         .foregroundColor(.white)
                     Text("Get Ready")
                         .font(.system(size: 20))
-                        .foregroundColor(.gray)
+                        .foregroundColor(.white)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.orange)
@@ -75,66 +75,52 @@ struct TimerView: View {
                 .buttonStyle(PlainButtonStyle())
                 .disabled(isTrackingPauseGesture)
             }
-            
-            // Full screen gesture overlay when tracking pause
-            if isTrackingPauseGesture {
-                Color.clear
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
+        }
+        .overlay(
+            // Pause button overlay - always visible
+            VStack {
+                HStack {
+                    // Pause button with hold detection
+                    ZStack {
+                        // Background
+                        Circle()
+                            .fill(Color.black.opacity(0.6))
+                            .frame(width: 50, height: 50)
+                        
+                        // Progress ring - only show when actively pressing
+                        if isPauseButtonPressed {
+                            Circle()
+                                .trim(from: 0, to: pauseHoldProgress)
+                                .stroke(Color.white, lineWidth: 3)
+                                .frame(width: 46, height: 46)
+                                .rotationEffect(.degrees(-90))
+                        }
+                        
+                        // Icon
+                        Image(systemName: "pause.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.white)
+                    }
+                    .scaleEffect(isPauseButtonPressed ? 1.2 : 1.0)
+                    .animation(.easeInOut(duration: 0.1), value: isPauseButtonPressed)
                     .gesture(
                         DragGesture(minimumDistance: 0)
+                            .onChanged { _ in
+                                if !isPauseButtonPressed && !isTrackingPauseGesture {
+                                    isTrackingPauseGesture = true
+                                    handlePausePress(true)
+                                }
+                            }
                             .onEnded { _ in
                                 handlePausePress(false)
                             }
                     )
-            }
-        }
-        .overlay(
-            // Pause button overlay - only visible during run
-            Group {
-                if viewModel.isRunning || viewModel.isWaitingForMotion {
-                    VStack {
-                        HStack {
-                            // Pause button with hold detection
-                            ZStack {
-                                // Background
-                                Circle()
-                                    .fill(Color.black.opacity(0.6))
-                                    .frame(width: 50, height: 50)
-                                
-                                // Progress ring - only show when actively pressing
-                                if isPauseButtonPressed {
-                                    Circle()
-                                        .trim(from: 0, to: pauseHoldProgress)
-                                        .stroke(Color.white, lineWidth: 3)
-                                        .frame(width: 46, height: 46)
-                                        .rotationEffect(.degrees(-90))
-                                }
-                                
-                                // Icon
-                                Image(systemName: "pause.fill")
-                                    .font(.system(size: 24))
-                                    .foregroundColor(.white)
-                            }
-                            .scaleEffect(isPauseButtonPressed ? 1.2 : 1.0)
-                            .animation(.easeInOut(duration: 0.1), value: isPauseButtonPressed)
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onChanged { _ in
-                                        if !isPauseButtonPressed && !isTrackingPauseGesture {
-                                            isTrackingPauseGesture = true
-                                            handlePausePress(true)
-                                        }
-                                    }
-                            )
-                            
-                            Spacer()
-                        }
-                        .padding()
-                        
-                        Spacer()
-                    }
+                    
+                    Spacer()
                 }
+                .padding()
+                
+                Spacer()
             }
         )
         .fullScreenCover(isPresented: $showingOutlierAlert) {
@@ -174,14 +160,12 @@ struct TimerView: View {
     
     private func handlePausePress(_ pressing: Bool) {
         if pressing {
-            // Start timer immediately on any press
+            // Start tracking the hold immediately
+            startPauseHoldAnimation()
+            
+            // Also start the timer if not already running
             if !viewModel.isRunning && !viewModel.isWaitingForMotion && !viewModel.isInCountdown {
                 viewModel.startRun()
-            }
-            
-            // If timer is running (either just started or was already running), begin hold animation
-            if viewModel.isRunning {
-                startPauseHoldAnimation()
             }
         } else {
             // Released
@@ -197,8 +181,8 @@ struct TimerView: View {
         holdStartTime = Date()
         pauseHoldProgress = 0
         
-        // Animate progress
-        withAnimation(.linear(duration: 3.0)) {
+        // Animate progress over 2 seconds
+        withAnimation(.linear(duration: 2.0)) {
             pauseHoldProgress = 1.0
         }
         
@@ -208,9 +192,9 @@ struct TimerView: View {
         pauseButtonTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
             count += 1
             WKInterfaceDevice.current().play(.click)
-            if count >= 3 {
+            if count >= 2 {
                 timer.invalidate()
-                // Call completion on the 3rd tick
+                // Call completion on the 2nd tick
                 DispatchQueue.main.async {
                     if self.isPauseButtonPressed {
                         self.handlePauseHoldComplete()
@@ -221,9 +205,11 @@ struct TimerView: View {
     }
     
     private func cancelPauseHold() {
+        // Cancel the hold animation
         isPauseButtonPressed = false
         pauseHoldProgress = 0
         pauseButtonTimer?.invalidate()
+        pauseButtonTimer = nil
         isTrackingPauseGesture = false
     }
     
@@ -231,14 +217,15 @@ struct TimerView: View {
         pauseButtonTimer?.invalidate()
         WKInterfaceDevice.current().play(.success)
         
-        if viewModel.isRunning {
-            // Reset timer without saving when pause is held
-            viewModel.resetTimer()
-        }
+        // Always reset timer - this stops any running timer and discards data
+        viewModel.resetTimer()
         
+        // Make sure pause button state is reset
         isPauseButtonPressed = false
         pauseHoldProgress = 0
         isTrackingPauseGesture = false
+        
+        // Show pause menu
         showingPauseMenu = true
     }
 }

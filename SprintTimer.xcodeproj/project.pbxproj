@@ -72,14 +72,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		964F074E2E368489002CC21A /* Exceptions for "SharedAssets" folder in "SprintTimer" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				SprintTimerViewModel.swift,
-			);
-			target = 96194DD12E3546E1008DA54F /* SprintTimer */;
-		};
-		964F074F2E368489002CC21A /* Exceptions for "SharedAssets" folder in "SprintTimer Watch App" target */ = {
+		96EEA7902E36BDB700E56EDA /* Exceptions for "SharedAssets" folder in "SprintTimer Watch App" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				DailyNotesManager.swift,
@@ -125,8 +118,7 @@
 		964F074D2E36847E002CC21A /* SharedAssets */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				964F074E2E368489002CC21A /* Exceptions for "SharedAssets" folder in "SprintTimer" target */,
-				964F074F2E368489002CC21A /* Exceptions for "SharedAssets" folder in "SprintTimer Watch App" target */,
+				96EEA7902E36BDB700E56EDA /* Exceptions for "SharedAssets" folder in "SprintTimer Watch App" target */,
 			);
 			path = SharedAssets;
 			sourceTree = "<group>";
