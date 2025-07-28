@@ -24,7 +24,7 @@ struct ContentView: View {
                 .pickerStyle(WheelPickerStyle())
                 .frame(height: 65)
                 .labelsHidden()
-                .padding(.top, 8)
+                .padding(.top, 20)  // Increased from 8 to move down from clock
                 
                 // Start Run Button
                 Button(action: {
@@ -66,7 +66,7 @@ struct ContentView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
-                .padding(.top, 8)
+                .padding(.top, 4)  // Reduced from 8 to balance spacing
             }
             .padding()
             .navigationBarHidden(true)

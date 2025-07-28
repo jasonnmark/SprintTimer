@@ -5,6 +5,7 @@ struct HistoryView: View {
     @Query(sort: \Run.date, order: .reverse) private var runs: [Run]
     @Environment(\.dismiss) var dismiss
     @State private var selectedDate: Date?
+    @StateObject private var dailyNotesManager = DailyNotesManager.shared
     
     // Group runs by day
     var runsByDay: [Date: [Run]] {
@@ -73,21 +74,35 @@ struct HistoryView: View {
 struct DayRow: View {
     let date: Date
     let runs: [Run]
+    @StateObject private var dailyNotesManager = DailyNotesManager.shared
     
     var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMM d"
+        formatter.dateFormat = "E M/d"  // "Sun 7/27" format
         return formatter
     }
     
+    var hasDayNotes: Bool {
+        dailyNotesManager.hasNote(for: date)
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(dateFormatter.string(from: date))
-                .font(.system(size: 14, weight: .medium))
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(dateFormatter.string(from: date))
+                    .font(.system(size: 14, weight: .medium))
+                
+                Text("\(runs.count) runs")
+                    .font(.system(size: 12))
+                    .foregroundColor(.gray)
+            }
             
-            Text("\(runs.count) runs")
-                .font(.system(size: 12))
-                .foregroundColor(.gray)
+            Spacer()
+            
+            // Day notes icon
+            Image(systemName: hasDayNotes ? "note.text" : "note.text")
+                .font(.system(size: 18))
+                .foregroundColor(hasDayNotes ? .blue : .gray)
         }
         .padding(.vertical, 4)
     }
@@ -98,11 +113,16 @@ struct DayDetailView: View {
     let date: Date
     let runs: [Run]
     let onBack: () -> Void
+    @StateObject private var dailyNotesManager = DailyNotesManager.shared
     
     var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
-        formatter.dateFormat = "EEEE, MMM d"
+        formatter.dateFormat = "E M/d"  // "Sun 7/27" format
         return formatter
+    }
+    
+    var hasDayNotes: Bool {
+        dailyNotesManager.hasNote(for: date)
     }
     
     var averageTime: String {
@@ -123,20 +143,33 @@ struct DayDetailView: View {
     
     var body: some View {
         VStack {
-            // Header with date
+            // Header with X button moved higher
             HStack {
                 Button(action: onBack) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 14))
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.gray)
                 }
                 .buttonStyle(PlainButtonStyle())
                 
                 Spacer()
                 
-                Text(dateFormatter.string(from: date))
-                    .font(.system(size: 14, weight: .medium))
+                HStack(spacing: 6) {
+                    Text(dateFormatter.string(from: date))
+                        .font(.system(size: 14, weight: .medium))
+                    
+                    // Day notes icon
+                    Image(systemName: hasDayNotes ? "note.text" : "note.text")
+                        .font(.system(size: 18))
+                        .foregroundColor(hasDayNotes ? .blue : .gray)
+                }
                 
                 Spacer()
+                
+                // Invisible spacer to balance
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 24))
+                    .opacity(0)
             }
             .padding(.horizontal)
             .padding(.top, 5)
@@ -161,7 +194,7 @@ struct DayDetailView: View {
             }
             .padding(.vertical, 8)
             
-            // Runs list
+            // Runs list with notes icons
             List {
                 ForEach(runs) { run in
                     HStack {
@@ -172,8 +205,13 @@ struct DayDetailView: View {
                         Spacer()
                         
                         Text(run.formattedTime)
-                            .font(.system(size: 32, weight: .bold, design: .monospaced))
+                            .font(.system(size: 28, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
+                        
+                        // Run notes icon
+                        Image(systemName: run.notes.isEmpty ? "note.text" : "note.text")
+                            .font(.system(size: 18))
+                            .foregroundColor(run.notes.isEmpty ? .gray : .blue)
                     }
                     .padding(.vertical, 6)
                 }
@@ -181,6 +219,8 @@ struct DayDetailView: View {
             }
             .listStyle(CarouselListStyle())
         }
+        .navigationBarHidden(true)  // Hide the default navigation bar
+    }
     }
     
     private func deleteRuns(offsets: IndexSet) {
