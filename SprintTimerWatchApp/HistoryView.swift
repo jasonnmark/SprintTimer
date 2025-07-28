@@ -221,7 +221,6 @@ struct DayDetailView: View {
         }
         .navigationBarHidden(true)  // Hide the default navigation bar
     }
-    }
     
     private func deleteRuns(offsets: IndexSet) {
         withAnimation {
@@ -229,51 +228,5 @@ struct DayDetailView: View {
                 DataManager.shared.deleteRun(runs[index])
             }
         }
-    }
-}
-
-// Simplified Stats View
-struct StatsView: View {
-    @Query private var runs: [Run]
-    
-    var totalRuns: Int {
-        runs.count
-    }
-    
-    var averageTime: String {
-        guard !runs.isEmpty else { return "0.000" }
-        let totalTime = runs.reduce(0) { $0 + $1.elapsedTime }
-        let avgTime = totalTime / Double(runs.count)
-        
-        let minutes = Int(avgTime) / 60
-        let seconds = Int(avgTime) % 60
-        let milliseconds = Int((avgTime.truncatingRemainder(dividingBy: 1)) * 1000)
-        
-        if minutes > 0 {
-            return String(format: "%d:%02d.%03d", minutes, seconds, milliseconds)
-        } else {
-            return String(format: "%d.%03d", seconds, milliseconds)
-        }
-    }
-    
-    var body: some View {
-        HStack(spacing: 40) {
-            VStack(spacing: 2) {
-                Text("\(totalRuns)")
-                    .font(.system(size: 24, weight: .bold))
-                Text("Total Runs")
-                    .font(.system(size: 11))
-                    .foregroundColor(.gray)
-            }
-            
-            VStack(spacing: 2) {
-                Text(averageTime)
-                    .font(.system(size: 24, weight: .bold))
-                Text("Average")
-                    .font(.system(size: 11))
-                    .foregroundColor(.gray)
-            }
-        }
-        .padding(.vertical, 10)
     }
 }
