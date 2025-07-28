@@ -99,10 +99,7 @@ struct DayRow: View {
             
             Spacer()
             
-            // Day notes icon
-            Image(systemName: hasDayNotes ? "note.text" : "note.text")
-                .font(.system(size: 18))
-                .foregroundColor(hasDayNotes ? .blue : .gray)
+            // Removed day notes icon from here - only show in detail view
         }
         .padding(.vertical, 4)
     }
@@ -142,8 +139,8 @@ struct DayDetailView: View {
     }
     
     var body: some View {
-        VStack {
-            // Header with X button moved higher
+        VStack(spacing: 0) {
+            // Header with X button at top of screen
             HStack {
                 Button(action: onBack) {
                     Image(systemName: "xmark.circle.fill")
@@ -153,26 +150,21 @@ struct DayDetailView: View {
                 .buttonStyle(PlainButtonStyle())
                 
                 Spacer()
-                
-                HStack(spacing: 6) {
-                    Text(dateFormatter.string(from: date))
-                        .font(.system(size: 14, weight: .medium))
-                    
-                    // Day notes icon
-                    Image(systemName: hasDayNotes ? "note.text" : "note.text")
-                        .font(.system(size: 18))
-                        .foregroundColor(hasDayNotes ? .blue : .gray)
-                }
-                
-                Spacer()
-                
-                // Invisible spacer to balance
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 24))
-                    .opacity(0)
             }
             .padding(.horizontal)
-            .padding(.top, 5)
+            .padding(.top, -45)  // Move X up to be level with clock
+            
+            // Date with notes icon
+            HStack(spacing: 6) {
+                Text(dateFormatter.string(from: date))
+                    .font(.system(size: 18, weight: .semibold))  // Bigger font
+                
+                // Day notes icon
+                Image(systemName: hasDayNotes ? "note.text" : "note.text")
+                    .font(.system(size: 18))
+                    .foregroundColor(hasDayNotes ? .blue : .gray)
+            }
+            .padding(.top, -15)  // Move date up behind clock
             
             // Stats
             HStack(spacing: 40) {
@@ -192,7 +184,7 @@ struct DayDetailView: View {
                         .foregroundColor(.gray)
                 }
             }
-            .padding(.vertical, 8)
+            .padding(.top, 8)  // Tighter padding from date
             
             // Runs list with notes icons
             List {
@@ -218,6 +210,7 @@ struct DayDetailView: View {
                 .onDelete(perform: deleteRuns)
             }
             .listStyle(CarouselListStyle())
+            .padding(.top, 8)
         }
         .navigationBarHidden(true)  // Hide the default navigation bar
     }
