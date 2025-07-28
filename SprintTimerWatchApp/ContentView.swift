@@ -12,8 +12,8 @@ struct ContentView: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 10) {
-                // Distance Selector - Larger with better styling
+            VStack(spacing: 12) {
+                // Distance Selector - Made 10% shorter with no label
                 Picker("", selection: $selectedDistance) {
                     ForEach(distances, id: \.self) { distance in
                         Text("\(distance)m")
@@ -22,8 +22,9 @@ struct ContentView: View {
                     }
                 }
                 .pickerStyle(WheelPickerStyle())
-                .frame(height: 70)
+                .frame(height: 65)
                 .labelsHidden()
+                .padding(.top, 8)
                 
                 // Start Run Button
                 Button(action: {
@@ -39,7 +40,7 @@ struct ContentView: View {
                 .background(Color.green)
                 .cornerRadius(15)
                 
-                // Bottom Buttons
+                // Bottom Buttons - Fixed with icon on top
                 HStack(spacing: 30) {
                     Button(action: {
                         showingHistory = true
