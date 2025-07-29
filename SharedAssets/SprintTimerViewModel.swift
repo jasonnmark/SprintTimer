@@ -200,7 +200,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         motionManager.accelerometerUpdateInterval = 0.01
     }
     
-    nonisolated private func setupLocationManager() {
+    private func setupLocationManager() {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = 1.0
@@ -227,7 +227,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         }
     }
     
-    nonisolated private func requestPermissions() {
+    private func requestPermissions() {
         // Location permissions
         locationManager.requestWhenInUseAuthorization()
         

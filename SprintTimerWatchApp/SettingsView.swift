@@ -5,7 +5,6 @@ struct SettingsView: View {
     @StateObject private var dataManager = DataManager.shared
     @State private var selectedStartModeIndex = 0
     @State private var debugInfo = ""
-    @State private var runCount = 0
     
     var body: some View {
         ScrollView {
@@ -15,13 +14,13 @@ struct SettingsView: View {
                     Text("DEBUG")
                         .font(.caption2)
                         .foregroundColor(.red)
-                    Text(debugInfo)
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundColor(.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("Runs: \(runCount)")
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundColor(.red)
+                    ScrollView {
+                        Text(debugInfo)
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxHeight: 80)
                 }
                 .padding(.horizontal)
                 
@@ -43,7 +42,7 @@ struct SettingsView: View {
                     .labelsHidden()
                     .onChange(of: selectedStartModeIndex) { _, newValue in
                         dataManager.startMode = StartMode.allCases[newValue]
-                        updateDebugInfo()
+                        Task { await updateDebugInfo() }
                     }
                     
                     if dataManager.startMode == .countdown {
@@ -63,7 +62,7 @@ struct SettingsView: View {
                             .frame(height: 70)
                             .labelsHidden()
                             .onChange(of: dataManager.countdownTime) { _, _ in
-                                updateDebugInfo()
+                                Task { await updateDebugInfo() }
                             }
                         }
                     }
@@ -91,10 +90,10 @@ struct SettingsView: View {
                         Toggle("Altitude Tracking", isOn: $dataManager.trackAltitude)
                     }
                     .padding(.horizontal)
-                    .onChange(of: dataManager.useGPS) { _, _ in updateDebugInfo() }
-                    .onChange(of: dataManager.useHealthKit) { _, _ in updateDebugInfo() }
-                    .onChange(of: dataManager.trackWeather) { _, _ in updateDebugInfo() }
-                    .onChange(of: dataManager.trackAltitude) { _, _ in updateDebugInfo() }
+                    .onChange(of: dataManager.useGPS) { _, _ in Task { await updateDebugInfo() } }
+                    .onChange(of: dataManager.useHealthKit) { _, _ in Task { await updateDebugInfo() } }
+                    .onChange(of: dataManager.trackWeather) { _, _ in Task { await updateDebugInfo() } }
+                    .onChange(of: dataManager.trackAltitude) { _, _ in Task { await updateDebugInfo() } }
                 }
                 
                 Divider()
@@ -111,8 +110,8 @@ struct SettingsView: View {
                         Toggle("Save GPS Time", isOn: $dataManager.saveGPSTime)
                     }
                     .padding(.horizontal)
-                    .onChange(of: dataManager.saveTapTime) { _, _ in updateDebugInfo() }
-                    .onChange(of: dataManager.saveGPSTime) { _, _ in updateDebugInfo() }
+                    .onChange(of: dataManager.saveTapTime) { _, _ in Task { await updateDebugInfo() } }
+                    .onChange(of: dataManager.saveGPSTime) { _, _ in Task { await updateDebugInfo() } }
                     
                     if dataManager.saveTapTime && dataManager.saveGPSTime {
                         Text("Both tap and GPS times will be recorded")
@@ -126,7 +125,7 @@ struct SettingsView: View {
                 // Refresh Button
                 Button(action: {
                     dataManager.refresh()
-                    updateDebugInfo()
+                    Task { await updateDebugInfo() }
                 }) {
                     Text("Refresh Settings")
                         .frame(maxWidth: .infinity)
@@ -144,7 +143,7 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             setupInitialState()
-            updateDebugInfo()
+            Task { await updateDebugInfo() }
         }
     }
     
@@ -155,12 +154,8 @@ struct SettingsView: View {
         }
     }
     
-    private func updateDebugInfo() {
-        debugInfo = dataManager.getDebugInfo()
+    private func updateDebugInfo() async {
+        debugInfo = await dataManager.getDebugInfo()
         print(debugInfo)
-        
-        Task {
-            runCount = await dataManager.getRunCount()
-        }
     }
 }

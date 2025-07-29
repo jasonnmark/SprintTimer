@@ -5,7 +5,6 @@ struct iOSSettingsView: View {
     @StateObject private var dataManager = DataManager.shared
     @State private var debugInfo = ""
     @State private var selectedStartModeIndex = 0
-    @State private var runCount = 0
     @State private var showingClearAlert = false
     
     var body: some View {
@@ -13,17 +12,18 @@ struct iOSSettingsView: View {
             Form {
                 // DEBUG SECTION AT TOP
                 Section(header: Text("Debug Info").foregroundColor(.red)) {
-                    Text(debugInfo)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.red)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        Text(debugInfo)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundColor(.red)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxHeight: 150)
                     
-                    Text("Total Runs: \(runCount)")
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.red)
-                    
-                    Button("Refresh Settings") {
-                        dataManager.refresh()
-                        updateDebugInfo()
+                    Button("Refresh Debug Info") {
+                        Task {
+                            await updateDebugInfo()
+                        }
                     }
                     .buttonStyle(.borderedProminent)
                     
@@ -56,7 +56,7 @@ struct iOSSettingsView: View {
                     .pickerStyle(MenuPickerStyle())
                     .onChange(of: selectedStartModeIndex) { _, newValue in
                         dataManager.startMode = StartMode.allCases[newValue]
-                        updateDebugInfo()
+                        Task { await updateDebugInfo() }
                     }
                     
                     if dataManager.startMode == .countdown {
@@ -67,7 +67,7 @@ struct iOSSettingsView: View {
                             Text("30 seconds").tag(30)
                         }
                         .onChange(of: dataManager.countdownTime) { _, _ in
-                            updateDebugInfo()
+                            Task { await updateDebugInfo() }
                         }
                     }
                     
@@ -78,20 +78,20 @@ struct iOSSettingsView: View {
                 
                 Section(header: Text("Data Collection")) {
                     Toggle("GPS Verification", isOn: $dataManager.useGPS)
-                        .onChange(of: dataManager.useGPS) { _, _ in updateDebugInfo() }
+                        .onChange(of: dataManager.useGPS) { _, _ in Task { await updateDebugInfo() } }
                     Toggle("HealthKit Integration", isOn: $dataManager.useHealthKit)
-                        .onChange(of: dataManager.useHealthKit) { _, _ in updateDebugInfo() }
+                        .onChange(of: dataManager.useHealthKit) { _, _ in Task { await updateDebugInfo() } }
                     Toggle("Weather Data", isOn: $dataManager.trackWeather)
-                        .onChange(of: dataManager.trackWeather) { _, _ in updateDebugInfo() }
+                        .onChange(of: dataManager.trackWeather) { _, _ in Task { await updateDebugInfo() } }
                     Toggle("Altitude Tracking", isOn: $dataManager.trackAltitude)
-                        .onChange(of: dataManager.trackAltitude) { _, _ in updateDebugInfo() }
+                        .onChange(of: dataManager.trackAltitude) { _, _ in Task { await updateDebugInfo() } }
                 }
                 
                 Section(header: Text("Save Options")) {
                     Toggle("Save Tap Time", isOn: $dataManager.saveTapTime)
-                        .onChange(of: dataManager.saveTapTime) { _, _ in updateDebugInfo() }
+                        .onChange(of: dataManager.saveTapTime) { _, _ in Task { await updateDebugInfo() } }
                     Toggle("Save GPS Time", isOn: $dataManager.saveGPSTime)
-                        .onChange(of: dataManager.saveGPSTime) { _, _ in updateDebugInfo() }
+                        .onChange(of: dataManager.saveGPSTime) { _, _ in Task { await updateDebugInfo() } }
                     
                     if dataManager.saveTapTime && dataManager.saveGPSTime {
                         Text("Both tap and GPS times will be recorded")
@@ -135,7 +135,7 @@ struct iOSSettingsView: View {
                     
                     Button("Force Refresh") {
                         dataManager.refresh()
-                        updateDebugInfo()
+                        Task { await updateDebugInfo() }
                     }
                     .buttonStyle(.bordered)
                 }
@@ -145,7 +145,7 @@ struct iOSSettingsView: View {
         .onAppear {
             dataManager.refresh() // Force refresh on appear
             setupInitialState()
-            updateDebugInfo()
+            Task { await updateDebugInfo() }
         }
         // Update UI when DataManager changes
         .onReceive(dataManager.objectWillChange) { _ in
@@ -170,13 +170,9 @@ struct iOSSettingsView: View {
         }
     }
     
-    private func updateDebugInfo() {
-        debugInfo = dataManager.getDebugInfo()
+    private func updateDebugInfo() async {
+        debugInfo = await dataManager.getDebugInfo()
         print(debugInfo)
-        
-        Task {
-            runCount = await dataManager.getRunCount()
-        }
     }
     
     @MainActor

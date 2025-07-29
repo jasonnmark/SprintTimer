@@ -42,7 +42,7 @@ class DataManager: ObservableObject {
     
     private let defaults: UserDefaults
     private let appGroupID = "group.com.JasonMark.SprintTimer"
-    private var refreshTimer: Timer?
+    private var isInitializing = true
     
     // Model container for SwiftData
     let modelContainer: ModelContainer
@@ -62,7 +62,9 @@ class DataManager: ObservableObject {
         didSet {
             defaults.set(startMode.rawValue, forKey: startModeKey)
             defaults.synchronize()
-            print("DataManager: Set startMode to \(startMode.rawValue)")
+            if !isInitializing {
+                SyncManager.shared.syncSettings()
+            }
         }
     }
     
@@ -70,6 +72,9 @@ class DataManager: ObservableObject {
         didSet {
             defaults.set(countdownTime, forKey: countdownTimeKey)
             defaults.synchronize()
+            if !isInitializing {
+                SyncManager.shared.syncSettings()
+            }
         }
     }
     
@@ -77,6 +82,9 @@ class DataManager: ObservableObject {
         didSet {
             defaults.set(useGPS, forKey: useGPSKey)
             defaults.synchronize()
+            if !isInitializing {
+                SyncManager.shared.syncSettings()
+            }
         }
     }
     
@@ -84,6 +92,9 @@ class DataManager: ObservableObject {
         didSet {
             defaults.set(useHealthKit, forKey: useHealthKitKey)
             defaults.synchronize()
+            if !isInitializing {
+                SyncManager.shared.syncSettings()
+            }
         }
     }
     
@@ -91,6 +102,9 @@ class DataManager: ObservableObject {
         didSet {
             defaults.set(trackWeather, forKey: trackWeatherKey)
             defaults.synchronize()
+            if !isInitializing {
+                SyncManager.shared.syncSettings()
+            }
         }
     }
     
@@ -98,6 +112,9 @@ class DataManager: ObservableObject {
         didSet {
             defaults.set(trackAltitude, forKey: trackAltitudeKey)
             defaults.synchronize()
+            if !isInitializing {
+                SyncManager.shared.syncSettings()
+            }
         }
     }
     
@@ -105,6 +122,9 @@ class DataManager: ObservableObject {
         didSet {
             defaults.set(saveTapTime, forKey: saveTapTimeKey)
             defaults.synchronize()
+            if !isInitializing {
+                SyncManager.shared.syncSettings()
+            }
         }
     }
     
@@ -112,6 +132,9 @@ class DataManager: ObservableObject {
         didSet {
             defaults.set(saveGPSTime, forKey: saveGPSTimeKey)
             defaults.synchronize()
+            if !isInitializing {
+                SyncManager.shared.syncSettings()
+            }
         }
     }
     
@@ -166,69 +189,43 @@ class DataManager: ObservableObject {
         // Load current values
         loadSettings()
         
-        // Set up periodic refresh for settings sync
-        startPeriodicRefresh()
+        // Mark initialization as complete
+        isInitializing = false
         
         print("✅ DataManager initialized successfully")
-    }
-    
-    private func startPeriodicRefresh() {
-        // Refresh every 2 seconds to catch changes from other device
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.loadSettings()
-        }
     }
     
     private func initializeDefaults() {
         // Set defaults if never saved
         if defaults.object(forKey: useGPSKey) == nil {
             defaults.set(true, forKey: useGPSKey)
-            print("DataManager: Initialized useGPS to true")
         }
         if defaults.object(forKey: useHealthKitKey) == nil {
             defaults.set(true, forKey: useHealthKitKey)
-            print("DataManager: Initialized useHealthKit to true")
         }
         if defaults.object(forKey: trackWeatherKey) == nil {
             defaults.set(true, forKey: trackWeatherKey)
-            print("DataManager: Initialized trackWeather to true")
         }
         if defaults.object(forKey: trackAltitudeKey) == nil {
             defaults.set(true, forKey: trackAltitudeKey)
-            print("DataManager: Initialized trackAltitude to true")
         }
         if defaults.object(forKey: saveTapTimeKey) == nil {
             defaults.set(true, forKey: saveTapTimeKey)
-            print("DataManager: Initialized saveTapTime to true")
         }
         if defaults.object(forKey: saveGPSTimeKey) == nil {
             defaults.set(false, forKey: saveGPSTimeKey)
-            print("DataManager: Initialized saveGPSTime to false")
         }
         if defaults.object(forKey: startModeKey) == nil {
             defaults.set(StartMode.tap.rawValue, forKey: startModeKey)
-            print("DataManager: Initialized startMode to tap")
         }
         if defaults.object(forKey: countdownTimeKey) == nil {
             defaults.set(10, forKey: countdownTimeKey)
-            print("DataManager: Initialized countdownTime to 10")
         }
         
         defaults.synchronize()
     }
     
     private func loadSettings() {
-        // Load and check if values changed
-        let oldStartMode = startMode
-        let oldCountdown = countdownTime
-        let oldGPS = useGPS
-        let oldHealthKit = useHealthKit
-        let oldWeather = trackWeather
-        let oldAltitude = trackAltitude
-        let oldTapTime = saveTapTime
-        let oldGPSTime = saveGPSTime
-        
-        // Load new values
         let savedMode = defaults.string(forKey: startModeKey) ?? StartMode.tap.rawValue
         startMode = StartMode(rawValue: savedMode) ?? .tap
         countdownTime = defaults.integer(forKey: countdownTimeKey) > 0 ? defaults.integer(forKey: countdownTimeKey) : 10
@@ -238,46 +235,64 @@ class DataManager: ObservableObject {
         trackAltitude = defaults.bool(forKey: trackAltitudeKey)
         saveTapTime = defaults.bool(forKey: saveTapTimeKey)
         saveGPSTime = defaults.bool(forKey: saveGPSTimeKey)
-        
-        // If anything changed, notify UI
-        if oldStartMode != startMode || oldCountdown != countdownTime ||
-           oldGPS != useGPS || oldHealthKit != useHealthKit ||
-           oldWeather != trackWeather || oldAltitude != trackAltitude ||
-           oldTapTime != saveTapTime || oldGPSTime != saveGPSTime {
-            objectWillChange.send()
-            print("Settings changed from other device")
-        }
     }
     
     func refresh() {
         defaults.synchronize()
         loadSettings()
         objectWillChange.send()
-        print("DataManager: Settings refreshed")
     }
     
-    func getDebugInfo() -> String {
+    // MARK: - Debug Info
+    
+    @MainActor
+    func getDebugInfo() async -> String {
         defaults.synchronize()
         
-        var info = "=== DataManager Debug ===\n"
+        var info = "=== DEBUG INFO ===\n"
         info += "App Group: \(appGroupID)\n"
         #if os(iOS)
         info += "Platform: iOS\n"
         #else
         info += "Platform: watchOS\n"
         #endif
-        info += "--- Settings ---\n"
+        info += "Time: \(Date().formatted())\n\n"
+        
+        info += "--- SETTINGS ---\n"
         info += "Start Mode: \(startMode.rawValue)\n"
         info += "Countdown: \(countdownTime)s\n"
-        info += "--- Data Collection ---\n"
         info += "GPS: \(useGPS)\n"
         info += "HealthKit: \(useHealthKit)\n"
         info += "Weather: \(trackWeather)\n"
         info += "Altitude: \(trackAltitude)\n"
-        info += "--- Save Options ---\n"
-        info += "Tap Time: \(saveTapTime)\n"
-        info += "GPS Time: \(saveGPSTime)\n"
-        info += "========================"
+        info += "Save Tap Time: \(saveTapTime)\n"
+        info += "Save GPS Time: \(saveGPSTime)\n\n"
+        
+        info += "--- DATA ---\n"
+        let runCount = await getRunCount()
+        info += "Total Runs: \(runCount)\n"
+        info += "Daily Notes: \(DailyNotesManager.shared.dailyNotes.count)\n\n"
+        
+        info += "--- SYNC STATUS ---\n"
+        if WCSession.isSupported() {
+            let session = WCSession.default
+            info += "WCSession Active: \(session.activationState == .activated)\n"
+            #if os(iOS)
+            info += "Paired: \(session.isPaired)\n"
+            info += "Watch Installed: \(session.isWatchAppInstalled)\n"
+            #endif
+            info += "Reachable: \(session.isReachable)\n"
+        } else {
+            info += "WCSession: Not supported\n"
+        }
+        
+        info += "\n--- RECENT RUNS ---\n"
+        if let recentRuns = await getRecentRuns(limit: 3) {
+            for (index, run) in recentRuns.enumerated() {
+                info += "\(index + 1). \(run.distance)m in \(run.formattedTime)\n"
+                info += "   \(run.formattedDate)\n"
+            }
+        }
         
         return info
     }
@@ -294,13 +309,33 @@ class DataManager: ObservableObject {
         }
     }
     
-    // History Management
+    @MainActor
+    func getRecentRuns(limit: Int) async -> [Run]? {
+        do {
+            let descriptor = FetchDescriptor<Run>(
+                sortBy: [SortDescriptor(\.date, order: .reverse)]
+            )
+            let runs = try modelContainer.mainContext.fetch(descriptor)
+            return Array(runs.prefix(limit))
+        } catch {
+            print("Error fetching recent runs: \(error)")
+            return nil
+        }
+    }
+    
+    // MARK: - History Management
+    
     @MainActor
     func saveRun(_ run: Run) {
         modelContainer.mainContext.insert(run)
         do {
             try modelContainer.mainContext.save()
             print("✅ DataManager: Run saved successfully")
+            
+            // Sync to other device
+            let runData = SyncManager.shared.runToSyncData(run)
+            SyncManager.shared.syncNewRun(runData)
+            
         } catch {
             print("❌ DataManager: Failed to save run: \(error)")
         }
@@ -308,15 +343,19 @@ class DataManager: ObservableObject {
     
     @MainActor
     func deleteRun(_ run: Run) {
+        let runId = run.id
         modelContainer.mainContext.delete(run)
         do {
             try modelContainer.mainContext.save()
+            
+            // Sync deletion to other device
+            SyncManager.shared.syncRunDeletion(runId)
+            
         } catch {
             print("❌ DataManager: Failed to delete run: \(error)")
         }
     }
-    
-    deinit {
-        refreshTimer?.invalidate()
-    }
 }
+
+// MARK: - WatchConnectivity Import
+import WatchConnectivity

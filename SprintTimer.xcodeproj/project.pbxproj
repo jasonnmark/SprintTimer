@@ -72,6 +72,48 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		96A744E22E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimer" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"SprintTimer Watch AppTests/SprintTimer_Watch_AppTests.swift",
+				"SprintTimer Watch AppUITests/SprintTimer_Watch_AppUITests.swift",
+				"SprintTimer Watch AppUITests/SprintTimer_Watch_AppUITestsLaunchTests.swift",
+				SprintTimerTests/SprintTimerTests.swift,
+				SprintTimerUITests/SprintTimerUITests.swift,
+				SprintTimerUITests/SprintTimerUITestsLaunchTests.swift,
+			);
+			target = 96194DD12E3546E1008DA54F /* SprintTimer */;
+		};
+		96A744E32E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimerTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				SprintTimerTests/SprintTimerTests.swift,
+			);
+			target = 96194DDE2E3546E1008DA54F /* SprintTimerTests */;
+		};
+		96A744E42E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimerUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				SprintTimerUITests/SprintTimerUITests.swift,
+				SprintTimerUITests/SprintTimerUITestsLaunchTests.swift,
+			);
+			target = 96194DE82E3546E1008DA54F /* SprintTimerUITests */;
+		};
+		96A744E52E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimer Watch AppTests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"SprintTimer Watch AppTests/SprintTimer_Watch_AppTests.swift",
+			);
+			target = 96194E032E3546E2008DA54F /* SprintTimer Watch AppTests */;
+		};
+		96A744E62E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimer Watch AppUITests" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"SprintTimer Watch AppUITests/SprintTimer_Watch_AppUITests.swift",
+				"SprintTimer Watch AppUITests/SprintTimer_Watch_AppUITestsLaunchTests.swift",
+			);
+			target = 96194E0D2E3546E2008DA54F /* SprintTimer Watch AppUITests */;
+		};
 		96EEA7902E36BDB700E56EDA /* Exceptions for "SharedAssets" folder in "SprintTimer Watch App" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -79,6 +121,7 @@
 				DataManager.swift,
 				RunModel.swift,
 				SprintTimerViewModel.swift,
+				SyncManager.swift,
 			);
 			target = 96194DF42E3546E1008DA54F /* SprintTimer Watch App */;
 		};
@@ -90,29 +133,9 @@
 			path = SprintTimeriOSApp;
 			sourceTree = "<group>";
 		};
-		96194DE22E3546E1008DA54F /* SprintTimerTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = SprintTimerTests;
-			sourceTree = "<group>";
-		};
-		96194DEC2E3546E1008DA54F /* SprintTimerUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = SprintTimerUITests;
-			sourceTree = "<group>";
-		};
 		96194DF92E3546E1008DA54F /* SprintTimerWatchApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = SprintTimerWatchApp;
-			sourceTree = "<group>";
-		};
-		96194E072E3546E2008DA54F /* SprintTimer Watch AppTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "SprintTimer Watch AppTests";
-			sourceTree = "<group>";
-		};
-		96194E112E3546E2008DA54F /* SprintTimer Watch AppUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "SprintTimer Watch AppUITests";
 			sourceTree = "<group>";
 		};
 		964F074D2E36847E002CC21A /* SharedAssets */ = {
@@ -121,6 +144,18 @@
 				96EEA7902E36BDB700E56EDA /* Exceptions for "SharedAssets" folder in "SprintTimer Watch App" target */,
 			);
 			path = SharedAssets;
+			sourceTree = "<group>";
+		};
+		96A744D12E38304F00A8CF4D /* Tests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				96A744E22E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimer" target */,
+				96A744E32E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimerTests" target */,
+				96A744E42E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimerUITests" target */,
+				96A744E52E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimer Watch AppTests" target */,
+				96A744E62E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimer Watch AppUITests" target */,
+			);
+			path = Tests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -175,13 +210,10 @@
 			isa = PBXGroup;
 			children = (
 				96194DD42E3546E1008DA54F /* SprintTimeriOSApp */,
-				96194DE22E3546E1008DA54F /* SprintTimerTests */,
-				96194DEC2E3546E1008DA54F /* SprintTimerUITests */,
 				96194DF92E3546E1008DA54F /* SprintTimerWatchApp */,
-				96194E072E3546E2008DA54F /* SprintTimer Watch AppTests */,
-				96194E112E3546E2008DA54F /* SprintTimer Watch AppUITests */,
 				96194DD32E3546E1008DA54F /* Products */,
 				964F074D2E36847E002CC21A /* SharedAssets */,
+				96A744D12E38304F00A8CF4D /* Tests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -218,6 +250,7 @@
 			fileSystemSynchronizedGroups = (
 				96194DD42E3546E1008DA54F /* SprintTimeriOSApp */,
 				964F074D2E36847E002CC21A /* SharedAssets */,
+				96A744D12E38304F00A8CF4D /* Tests */,
 			);
 			name = SprintTimer;
 			packageProductDependencies = (
@@ -239,9 +272,6 @@
 			dependencies = (
 				96194DE12E3546E1008DA54F /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				96194DE22E3546E1008DA54F /* SprintTimerTests */,
-			);
 			name = SprintTimerTests;
 			packageProductDependencies = (
 			);
@@ -261,9 +291,6 @@
 			);
 			dependencies = (
 				96194DEB2E3546E1008DA54F /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				96194DEC2E3546E1008DA54F /* SprintTimerUITests */,
 			);
 			name = SprintTimerUITests;
 			packageProductDependencies = (
@@ -307,9 +334,6 @@
 			dependencies = (
 				96194E062E3546E2008DA54F /* PBXTargetDependency */,
 			);
-			fileSystemSynchronizedGroups = (
-				96194E072E3546E2008DA54F /* SprintTimer Watch AppTests */,
-			);
 			name = "SprintTimer Watch AppTests";
 			packageProductDependencies = (
 			);
@@ -329,9 +353,6 @@
 			);
 			dependencies = (
 				96194E102E3546E2008DA54F /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				96194E112E3546E2008DA54F /* SprintTimer Watch AppUITests */,
 			);
 			name = "SprintTimer Watch AppUITests";
 			packageProductDependencies = (

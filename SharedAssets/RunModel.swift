@@ -8,27 +8,37 @@ final class Run {
     var distance: Int
     var elapsedTime: TimeInterval
     var notes: String
-    var dayNotes: String // New field for daily notes
+    var dayNotes: String // Deprecated - use DailyNotesManager instead
     
-    // GPS Data
+    // GPS & Location Data
     var actualDistance: Double?
     var averageSpeed: Double?
+    var latitude: Double?
+    var longitude: Double?
+    var altitude: Double?
+    var altitudeGain: Double?
+    var locationName: String?
     
     // Health Data
     var startHeartRate: Double?
     var endHeartRate: Double?
+    var averageHeartRate: Double?
+    var maxHeartRate: Double?
     var steps: Int?
     var strideLength: Double?
     
-    // Location Data
-    var latitude: Double?
-    var longitude: Double?
-    var altitude: Double?
-    
     // Weather Data
     var temperature: Double?
+    var feelsLike: Double?
     var humidity: Double?
     var pressure: Double?
+    var windSpeed: Double?
+    var windDirection: Double?
+    var visibility: Double?
+    var uvIndex: Int?
+    var dewPoint: Double?
+    var aqi: Int?
+    var weatherCondition: String?
     
     init(distance: Int, elapsedTime: TimeInterval, notes: String = "", dayNotes: String = "") {
         self.id = UUID()
