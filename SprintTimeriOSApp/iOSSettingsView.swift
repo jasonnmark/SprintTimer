@@ -12,13 +12,12 @@ struct iOSSettingsView: View {
             Form {
                 // DEBUG SECTION AT TOP
                 Section(header: Text("Debug Info").foregroundColor(.red)) {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        Text(debugInfo)
-                            .font(.system(.caption2, design: .monospaced))
-                            .foregroundColor(.red)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxHeight: 150)
+                    Text(debugInfo)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundColor(.red)
+                        .lineLimit(10)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxHeight: 150)
                     
                     Button("Refresh Debug Info") {
                         Task {
@@ -146,10 +145,6 @@ struct iOSSettingsView: View {
             dataManager.refresh() // Force refresh on appear
             setupInitialState()
             Task { await updateDebugInfo() }
-        }
-        // Update UI when DataManager changes
-        .onReceive(dataManager.objectWillChange) { _ in
-            setupInitialState()
         }
         .alert("Clear All Data?", isPresented: $showingClearAlert) {
             Button("Cancel", role: .cancel) { }

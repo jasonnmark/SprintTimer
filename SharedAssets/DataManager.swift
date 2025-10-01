@@ -273,7 +273,8 @@ class DataManager: ObservableObject {
     func refresh() {
         defaults.synchronize()
         loadSettings()
-        objectWillChange.send()
+        // Remove immediate objectWillChange.send() to prevent ScrollView performance issues
+        // @Published properties will handle updates naturally
     }
     
     // MARK: - Debug Info

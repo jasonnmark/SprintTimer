@@ -239,7 +239,6 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         
         // Only force UI update if we actually changed something
         if hasChanges {
-            dataManager.objectWillChange.send()
             print("✅ SyncManager: Settings updated with changes")
         } else {
             print("ℹ️ SyncManager: No settings changes needed")
@@ -477,3 +476,4 @@ extension SyncManager {
         return data
     }
 }
+

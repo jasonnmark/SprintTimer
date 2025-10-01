@@ -15,10 +15,11 @@ struct HistoryView: View {
     @State private var editingDate: Date?
     @State private var editingRun: Run?
     @StateObject private var notesViewModel = SprintTimerViewModel()
+    @State private var selectedDistance: Int = 0 // 0 = All runs
     
     // Group runs by day
     var runsByDay: [Date: [Run]] {
-        Dictionary(grouping: runs) { run in
+        Dictionary(grouping: filteredRuns) { run in
             Calendar.current.startOfDay(for: run.date)
         }
     }
@@ -26,6 +27,18 @@ struct HistoryView: View {
     // Get sorted days
     var sortedDays: [Date] {
         runsByDay.keys.sorted(by: >)
+    }
+    
+    // Unique distances available for filtering
+    var availableDistances: [Int] {
+        let distances = Set(runs.map { $0.distance }).sorted()
+        return distances
+    }
+
+    // Filtered runs based on selected distance
+    var filteredRuns: [Run] {
+        if selectedDistance == 0 { return runs }
+        return runs.filter { $0.distance == selectedDistance }
     }
     
     var body: some View {
@@ -36,6 +49,24 @@ struct HistoryView: View {
                     Text("History")
                         .font(.system(size: 18, weight: .bold))
                         .padding(.vertical, 8)
+                    
+                    // Distance Filter Picker (watchOS)
+                    HStack(spacing: 6) {
+                        Text("Filter:")
+                            .font(.system(size: 12))
+                            .foregroundColor(.gray)
+
+                        Picker("Distance", selection: $selectedDistance) {
+                            Text("All").tag(0)
+                            ForEach(availableDistances, id: \.self) { distance in
+                                Text("\(distance)m").tag(distance)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 6)
                     
                     if sortedDays.isEmpty {
                         Spacer()
@@ -229,11 +260,9 @@ struct DayDetailView: View {
                     Image(systemName: "note.text")
                         .font(.system(size: 16))
                         .foregroundColor(hasDayNotes ? .blue : .gray)
-                    
-                    Spacer() // Fill the width to make entire area tappable
                 }
                 .contentShape(Rectangle()) // Make entire area tappable
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center) // Center the date and icon
             }
             .buttonStyle(PlainButtonStyle())
             .padding(.horizontal)
