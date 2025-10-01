@@ -1,75 +1,87 @@
 import SwiftUI
+import SwiftData
 
 struct NotesView: View {
     @ObservedObject var viewModel: SprintTimerViewModel
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+
     @State private var noteText = ""
     @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
         NavigationView {
             VStack(spacing: 8) {
+                Text("Run Notes")
+                    .font(.system(size: 14, weight: .bold))
+                
 #if os(watchOS)
                 TextField("Add run notes...", text: $noteText, axis: .vertical)
                     .font(.system(size: 12))
                     .focused($isTextFieldFocused)
+                    .focusable()
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.gray.opacity(0.2))
-                    .cornerRadius(8)
-                    .padding(.horizontal)
 #else
-                ZStack(alignment: .topLeading) {
-                    TextEditor(text: $noteText)
-                        .font(.system(size: 12))
-                        .focused($isTextFieldFocused)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(8)
-                    
-                    if noteText.isEmpty {
-                        Text("Add run notes...")
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 12)
-                            .allowsHitTesting(false)
-                    }
-                }
-                .padding(.horizontal)
+                TextEditor(text: $noteText)
+                    .font(.body)
+                    .frame(minHeight: 120)
+                    .padding(.horizontal, 8)
 #endif
-                
+
                 HStack(spacing: 12) {
-                    Button(action: {
-                        saveNotes()
-                    }) {
-                        Text("Save")
-                            .font(.system(size: 12))
-                            .frame(maxWidth: .infinity)
+                    Button("Cancel") {
+                        handleFinish(saveNotes: false)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("Save") {
+                        handleFinish(saveNotes: true)
                     }
                     .buttonStyle(.borderedProminent)
                 }
-                .padding(.horizontal)
+                .padding(.top, 6)
+                
+                Spacer(minLength: 0)
             }
             .padding(.vertical, 8)
+            .navigationBarHidden(true)
         }
         .onAppear {
-            // Load existing run notes
+            // Start with whatever notes were previously stored (if any)
             noteText = viewModel.currentRunNotes
-            
-            // Focus the text field
+
+            // Focus the text field on watch to bring up keyboard/dictation automatically
+            #if os(watchOS)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 isTextFieldFocused = true
             }
+            #endif
         }
     }
     
-    private func saveNotes() {
-        // Attach notes to the current (stopped) run and save it now
-        viewModel.currentRunNotes = noteText
-        viewModel.saveCurrentRun(modelContext: DataManager.shared.modelContainer.mainContext)
-        viewModel.resetTimer()
+    private func handleFinish(saveNotes: Bool) {
+        if saveNotes {
+            if let editingRun = viewModel.currentEditingRun {
+                // We're editing an existing run from history
+                editingRun.notes = noteText
+                // The run is already in the model context, just save it
+                try? modelContext.save()
+                // Clear the editing reference
+                viewModel.currentEditingRun = nil
+            } else {
+                // We're creating a new run (original behavior)
+                viewModel.currentRunNotes = noteText
+                // Always save as a new run and reset timer (reverting to previous behavior)
+                viewModel.saveCurrentRun(modelContext: modelContext)
+                viewModel.resetTimer()
+            }
+        } else {
+            // Cancel: clear editing reference if we were editing
+            if viewModel.currentEditingRun != nil {
+                viewModel.currentEditingRun = nil
+            }
+        }
+        // Dismiss ONLY the notes sheet
         dismiss()
     }
 }

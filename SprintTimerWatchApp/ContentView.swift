@@ -74,7 +74,7 @@ struct ContentView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView()
         }
-        .sheet(isPresented: $showingHistory) {
+        .fullScreenCover(isPresented: $showingHistory) {
             HistoryView()
         }
         .fullScreenCover(isPresented: $showingRunner) {
@@ -82,3 +82,4 @@ struct ContentView: View {
         }
     }
 }
+

@@ -28,6 +28,8 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     @Published var selectedDistance = 100
     @Published var dailyNotes = ""
     @Published var currentRunNotes = ""
+    @Published var currentEditingRun: Run? // For editing existing run notes from history
+    @Published var currentEditingDate: Date? // For editing day notes for specific date from history
     
     // Current Run Data
     @Published var currentLocation: CLLocation?
@@ -140,8 +142,8 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         let outlierCheck = isRunOutlier(modelContext: modelContext)
         
         if !outlierCheck.isOutlier {
-            // Not an outlier, save immediately
-            saveRunData(modelContext: modelContext)
+            // Not an outlier, but don't save yet - let the UI handle saving
+            // This prevents double-saving
         }
         
         return outlierCheck
@@ -154,6 +156,17 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     func endRun(modelContext: ModelContext) {
         _ = stopRun(modelContext: modelContext)
         resetTimer()
+    }
+    
+    func saveWithNotes(modelContext: ModelContext, completion: @escaping () -> Void = {}) {
+        #if os(watchOS)
+        // IMPORTANT: Don’t present QuickBoard here (we may still be inside a confirmationDialog).
+        // Ask RunnerView to present it after the dialog disappears.
+        NotificationCenter.default.post(name: Notification.Name("ShowRunNotes"), object: nil)
+        #else
+        // iPhone flow (unchanged): use your existing route to show a notes UI.
+        NotificationCenter.default.post(name: Notification.Name("ShowRunNotes"), object: nil)
+        #endif
     }
     
     func resetTimer() {
@@ -231,19 +244,30 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         // Location permissions
         locationManager.requestWhenInUseAuthorization()
         
-        // HealthKit permissions
-        if HKHealthStore.isHealthDataAvailable() {
-            let typesToRead: Set<HKObjectType> = [
-                HKObjectType.quantityType(forIdentifier: .heartRate)!,
-                HKObjectType.quantityType(forIdentifier: .stepCount)!
-            ]
-            
-            let typesToWrite: Set<HKSampleType> = [
-                HKObjectType.workoutType()
-            ]
-            
-            healthStore.requestAuthorization(toShare: typesToWrite, read: typesToRead) { _, _ in
-                // Authorization complete
+        // HealthKit permissions - only if available and user has enabled it
+        guard HKHealthStore.isHealthDataAvailable(), dataManager.useHealthKit else {
+            print("HealthKit not available or not enabled in settings")
+            return
+        }
+        
+        let typesToRead: Set<HKObjectType> = [
+            HKObjectType.quantityType(forIdentifier: .heartRate)!,
+            HKObjectType.quantityType(forIdentifier: .stepCount)!
+        ]
+        
+        let typesToWrite: Set<HKSampleType> = [
+            HKObjectType.workoutType()
+        ]
+        
+        healthStore.requestAuthorization(toShare: typesToWrite, read: typesToRead) { success, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("❌ HealthKit authorization error: \(error)")
+                } else if success {
+                    print("✅ HealthKit authorization granted")
+                } else {
+                    print("⚠️ HealthKit authorization denied")
+                }
             }
         }
     }
@@ -274,7 +298,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         }
     }
     
-    private func saveRunData(modelContext: ModelContext) {
+    func saveRunData(modelContext: ModelContext) {
         print("DEBUG: Starting save - Distance: \(selectedDistance), Time: \(elapsedTime)")
         
         // Combine daily notes and run notes

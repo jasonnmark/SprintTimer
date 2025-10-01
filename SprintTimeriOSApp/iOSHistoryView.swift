@@ -97,10 +97,19 @@ struct iOSHistoryView: View {
                                     }
                                 )
                             }
+                            .onDelete { indexSet in
+                                deleteRuns(at: indexSet, from: dayData.runs)
+                            }
                         }
                     }
                 }
                 .listStyle(InsetGroupedListStyle())
+                .refreshable {
+                    // Force UI refresh without creating bindings that cause performance issues
+                    await MainActor.run {
+                        lastRefresh = Date()
+                    }
+                }
             }
             .navigationTitle("History")
             .toolbar {
@@ -174,6 +183,15 @@ struct iOSHistoryView: View {
             selectedRuns.removeAll()
             selectedDays.removeAll()
             editMode = .inactive
+        }
+    }
+    
+    private func deleteRuns(at offsets: IndexSet, from runs: [Run]) {
+        withAnimation {
+            for index in offsets {
+                let run = runs[index]
+                DataManager.shared.deleteRun(run)
+            }
         }
     }
 }
@@ -363,6 +381,7 @@ struct RunNoteEditorView: View {
                     TextEditor(text: $noteText)
                         .frame(minHeight: 100)
                         .focused($isTextFieldFocused)
+                        .scrollContentBackground(.hidden)
                 }
             }
             .navigationTitle("Run Notes")
@@ -420,6 +439,7 @@ struct DayNoteEditorView: View {
                     TextEditor(text: $noteText)
                         .frame(minHeight: 100)
                         .focused($isTextFieldFocused)
+                        .scrollContentBackground(.hidden)
                 }
                 
                 Section {
