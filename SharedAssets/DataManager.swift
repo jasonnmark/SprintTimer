@@ -40,7 +40,7 @@ enum StartMode: String, CaseIterable {
 class DataManager: ObservableObject {
     static let shared = DataManager()
     
-    private let defaults: UserDefaults
+    let defaults: UserDefaults
     private let appGroupID = "group.com.JasonMark.SprintTimer"
     private var isInitializing = true
     
@@ -60,10 +60,15 @@ class DataManager: ObservableObject {
     // Settings Properties
     @Published var startMode: StartMode = .tap {
         didSet {
+            guard oldValue != startMode else { return } // Prevent unnecessary saves
             defaults.set(startMode.rawValue, forKey: startModeKey)
-            defaults.synchronize()
+            defaults.synchronize() // Force immediate save
+            
+            // Add a small delay before syncing to ensure local save completes
             if !isInitializing {
-                SyncManager.shared.syncSettings()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    SyncManager.shared.syncSettings()
+                }
             }
         }
     }
@@ -71,9 +76,13 @@ class DataManager: ObservableObject {
     @Published var countdownTime: Int = 10 {
         didSet {
             defaults.set(countdownTime, forKey: countdownTimeKey)
-            defaults.synchronize()
-            if !isInitializing {
-                SyncManager.shared.syncSettings()
+            defaults.synchronize() // Force immediate save
+            
+            // Add a small delay before syncing to ensure local save completes
+            if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    SyncManager.shared.syncSettings()
+                }
             }
         }
     }
@@ -81,9 +90,13 @@ class DataManager: ObservableObject {
     @Published var useGPS: Bool = true {
         didSet {
             defaults.set(useGPS, forKey: useGPSKey)
-            defaults.synchronize()
-            if !isInitializing {
-                SyncManager.shared.syncSettings()
+            defaults.synchronize() // Force immediate save
+            
+            // Add a small delay before syncing to ensure local save completes
+            if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    SyncManager.shared.syncSettings()
+                }
             }
         }
     }
@@ -91,9 +104,13 @@ class DataManager: ObservableObject {
     @Published var useHealthKit: Bool = true {
         didSet {
             defaults.set(useHealthKit, forKey: useHealthKitKey)
-            defaults.synchronize()
-            if !isInitializing {
-                SyncManager.shared.syncSettings()
+            defaults.synchronize() // Force immediate save
+            
+            // Add a small delay before syncing to ensure local save completes
+            if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    SyncManager.shared.syncSettings()
+                }
             }
         }
     }
@@ -101,9 +118,13 @@ class DataManager: ObservableObject {
     @Published var trackWeather: Bool = true {
         didSet {
             defaults.set(trackWeather, forKey: trackWeatherKey)
-            defaults.synchronize()
-            if !isInitializing {
-                SyncManager.shared.syncSettings()
+            defaults.synchronize() // Force immediate save
+            
+            // Add a small delay before syncing to ensure local save completes
+            if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    SyncManager.shared.syncSettings()
+                }
             }
         }
     }
@@ -111,9 +132,13 @@ class DataManager: ObservableObject {
     @Published var trackAltitude: Bool = true {
         didSet {
             defaults.set(trackAltitude, forKey: trackAltitudeKey)
-            defaults.synchronize()
-            if !isInitializing {
-                SyncManager.shared.syncSettings()
+            defaults.synchronize() // Force immediate save
+            
+            // Add a small delay before syncing to ensure local save completes
+            if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    SyncManager.shared.syncSettings()
+                }
             }
         }
     }
@@ -121,9 +146,13 @@ class DataManager: ObservableObject {
     @Published var saveTapTime: Bool = true {
         didSet {
             defaults.set(saveTapTime, forKey: saveTapTimeKey)
-            defaults.synchronize()
-            if !isInitializing {
-                SyncManager.shared.syncSettings()
+            defaults.synchronize() // Force immediate save
+            
+            // Add a small delay before syncing to ensure local save completes
+            if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    SyncManager.shared.syncSettings()
+                }
             }
         }
     }
@@ -131,9 +160,13 @@ class DataManager: ObservableObject {
     @Published var saveGPSTime: Bool = false {
         didSet {
             defaults.set(saveGPSTime, forKey: saveGPSTimeKey)
-            defaults.synchronize()
-            if !isInitializing {
-                SyncManager.shared.syncSettings()
+            defaults.synchronize() // Force immediate save
+            
+            // Add a small delay before syncing to ensure local save completes
+            if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    SyncManager.shared.syncSettings()
+                }
             }
         }
     }

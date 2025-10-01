@@ -92,7 +92,7 @@ struct SimpleHomeView: View {
                                 
                                 Spacer()
                                 
-                                Text(run.date, style: .relative)
+                                Text(formatRunDate(run.date))
                                     .font(.caption)
                                     .foregroundColor(.gray)
                             }
@@ -135,6 +135,28 @@ struct SimpleHomeView: View {
             return String(format: "%d:%02d.%03d", minutes, seconds, milliseconds)
         } else {
             return String(format: "%d.%03d", seconds, milliseconds)
+        }
+    }
+    
+    private func formatRunDate(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        if calendar.isDateInToday(date) {
+            // Today: "today 2:34 PM"
+            let formatter = DateFormatter()
+            formatter.timeStyle = .short
+            return "today \(formatter.string(from: date))"
+        } else if calendar.isDateInYesterday(date) {
+            // Yesterday: "yesterday 3:45 PM"
+            let formatter = DateFormatter()
+            formatter.timeStyle = .short
+            return "yesterday \(formatter.string(from: date))"
+        } else {
+            // Other days: "9/4 11:10 AM"
+            let formatter = DateFormatter()
+            formatter.dateFormat = "M/d h:mm a"
+            return formatter.string(from: date)
         }
     }
 }

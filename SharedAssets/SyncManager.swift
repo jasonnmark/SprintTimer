@@ -6,6 +6,7 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = SyncManager()
     
     private var session: WCSession?
+    @Published var isUpdatingFromSync = false
     
     // Sync message types
     private enum SyncMessageType: String {
@@ -28,6 +29,9 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
     // MARK: - Public Methods
     
     func syncSettings() {
+        // Don't sync if we're currently updating from a sync
+        guard !isUpdatingFromSync else { return }
+        
         guard let session = session, session.isReachable else {
             print("⚠️ SyncManager: Device not reachable for settings sync")
             return
@@ -176,44 +180,70 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
     private func handleSettingsUpdate(_ settings: [String: Any]) {
         print("📥 SyncManager: Received settings update")
         
+        // Set flag to prevent sync loops
+        isUpdatingFromSync = true
+        defer { isUpdatingFromSync = false }
+        
         let dataManager = DataManager.shared
+        var hasChanges = false
         
-        // Update DataManager settings
+        // Only update settings that have actually changed
         if let startModeRaw = settings["startMode"] as? String,
-           let startMode = StartMode(rawValue: startModeRaw) {
+           let startMode = StartMode(rawValue: startModeRaw),
+           dataManager.startMode != startMode {
             dataManager.startMode = startMode
+            hasChanges = true
         }
         
-        if let countdownTime = settings["countdownTime"] as? Int {
+        if let countdownTime = settings["countdownTime"] as? Int,
+           dataManager.countdownTime != countdownTime {
             dataManager.countdownTime = countdownTime
+            hasChanges = true
         }
         
-        if let useGPS = settings["useGPS"] as? Bool {
+        if let useGPS = settings["useGPS"] as? Bool,
+           dataManager.useGPS != useGPS {
             dataManager.useGPS = useGPS
+            hasChanges = true
         }
         
-        if let useHealthKit = settings["useHealthKit"] as? Bool {
+        if let useHealthKit = settings["useHealthKit"] as? Bool,
+           dataManager.useHealthKit != useHealthKit {
             dataManager.useHealthKit = useHealthKit
+            hasChanges = true
         }
         
-        if let trackWeather = settings["trackWeather"] as? Bool {
+        if let trackWeather = settings["trackWeather"] as? Bool,
+           dataManager.trackWeather != trackWeather {
             dataManager.trackWeather = trackWeather
+            hasChanges = true
         }
         
-        if let trackAltitude = settings["trackAltitude"] as? Bool {
+        if let trackAltitude = settings["trackAltitude"] as? Bool,
+           dataManager.trackAltitude != trackAltitude {
             dataManager.trackAltitude = trackAltitude
+            hasChanges = true
         }
         
-        if let saveTapTime = settings["saveTapTime"] as? Bool {
+        if let saveTapTime = settings["saveTapTime"] as? Bool,
+           dataManager.saveTapTime != saveTapTime {
             dataManager.saveTapTime = saveTapTime
+            hasChanges = true
         }
         
-        if let saveGPSTime = settings["saveGPSTime"] as? Bool {
+        if let saveGPSTime = settings["saveGPSTime"] as? Bool,
+           dataManager.saveGPSTime != saveGPSTime {
             dataManager.saveGPSTime = saveGPSTime
+            hasChanges = true
         }
         
-        // Force UI update
-        dataManager.objectWillChange.send()
+        // Only force UI update if we actually changed something
+        if hasChanges {
+            dataManager.objectWillChange.send()
+            print("✅ SyncManager: Settings updated with changes")
+        } else {
+            print("ℹ️ SyncManager: No settings changes needed")
+        }
     }
     
     @MainActor
@@ -270,7 +300,9 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
                     run.humidity = humidity
                 }
                 
-                dataManager.saveRun(run)
+                // Save without triggering another sync
+                context.insert(run)
+                try context.save()
                 print("✅ SyncManager: Run added to database")
             } else {
                 print("⚠️ SyncManager: Run already exists, skipping")
@@ -296,7 +328,8 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         do {
             let runs = try context.fetch(descriptor)
             if let runToDelete = runs.first(where: { $0.id == uuid }) {
-                dataManager.deleteRun(runToDelete)
+                context.delete(runToDelete)
+                try context.save()
                 print("✅ SyncManager: Run deleted")
             }
         } catch {

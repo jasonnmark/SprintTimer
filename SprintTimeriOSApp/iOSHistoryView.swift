@@ -187,35 +187,59 @@ struct DayHeaderView: View {
     let onToggle: () -> Void
     let onNotesTapped: () -> Void
     
+    @StateObject private var dailyNotesManager = DailyNotesManager.shared
+    
     var body: some View {
-        HStack {
-            if editMode == .active {
-                Button(action: onToggle) {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isSelected ? .blue : .gray)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                if editMode == .active {
+                    Button(action: onToggle) {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(isSelected ? .blue : .gray)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(date, style: .date)
+                        .font(.headline)
+                    Text("\(runCount) runs")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                
+                Spacer()
+                
+                Button(action: onNotesTapped) {
+                    Image(systemName: hasDayNote ? "note.text" : "note.text.badge.plus")
+                        .font(.system(size: 20)) // Fixed size for consistency
+                        .foregroundColor(hasDayNote ? .blue : .gray)
+                        .frame(width: 30, height: 30) // Fixed frame
                 }
                 .buttonStyle(PlainButtonStyle())
             }
+            .padding(.vertical, 4)
             
-            VStack(alignment: .leading, spacing: 2) {
-                Text(date, style: .date)
-                    .font(.headline)
-                Text("\(runCount) runs")
-                    .font(.caption)
-                    .foregroundColor(.gray)
+            // Show day notes if they exist
+            if hasDayNote {
+                let dayNoteText = dailyNotesManager.getNote(for: date)
+                if !dayNoteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "note.text")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                            .padding(.top, 1)
+                        
+                        Text(dayNoteText)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.leading, editMode == .active ? 30 : 0)
+                    .padding(.bottom, 4)
+                }
             }
-            
-            Spacer()
-            
-            Button(action: onNotesTapped) {
-                Image(systemName: hasDayNote ? "note.text" : "note.text.badge.plus")
-                    .font(.system(size: 20)) // Fixed size for consistency
-                    .foregroundColor(hasDayNote ? .blue : .gray)
-                    .frame(width: 30, height: 30) // Fixed frame
-            }
-            .buttonStyle(PlainButtonStyle())
         }
-        .padding(.vertical, 4)
     }
 }
 
@@ -231,61 +255,80 @@ struct RunRowView: View {
     }
     
     var body: some View {
-        HStack {
-            if editMode == .active {
-                Button(action: onToggle) {
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(isSelected ? .blue : .gray)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("\(run.distance)m")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                    Text(run.formattedTime)
-                        .font(.headline)
-                        .fontDesign(.monospaced)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                if editMode == .active {
+                    Button(action: onToggle) {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(isSelected ? .blue : .gray)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
                 
-                HStack(spacing: 12) {
-                    Text(run.date, style: .time)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("\(run.distance)m")
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                        Text(run.formattedTime)
+                            .font(.headline)
+                            .fontDesign(.monospaced)
+                    }
+                    
+                    HStack(spacing: 12) {
+                        Text(run.date, style: .time)
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        
+                        if let gpsDistance = run.actualDistance, gpsDistance > 0 {
+                            Label("\(Int(gpsDistance))m", systemImage: "location.fill")
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                        }
+                        
+                        if let heartRate = run.endHeartRate {
+                            Label("\(Int(heartRate))", systemImage: "heart.fill")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                    }
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(run.pace)
                         .font(.caption)
                         .foregroundColor(.gray)
                     
-                    if let gpsDistance = run.actualDistance, gpsDistance > 0 {
-                        Label("\(Int(gpsDistance))m", systemImage: "location.fill")
-                            .font(.caption)
-                            .foregroundColor(.blue)
+                    Button(action: onNotesTapped) {
+                        Image(systemName: hasRunNotes ? "note.text" : "note.text.badge.plus")
+                            .font(.system(size: 20)) // Fixed size for consistency
+                            .foregroundColor(hasRunNotes ? .blue : .gray)
+                            .frame(width: 30, height: 30) // Fixed frame
                     }
-                    
-                    if let heartRate = run.endHeartRate {
-                        Label("\(Int(heartRate))", systemImage: "heart.fill")
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
+            .padding(.vertical, 4)
             
-            Spacer()
-            
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(run.pace)
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                
-                Button(action: onNotesTapped) {
-                    Image(systemName: hasRunNotes ? "note.text" : "note.text.badge.plus")
-                        .font(.system(size: 20)) // Fixed size for consistency
-                        .foregroundColor(hasRunNotes ? .blue : .gray)
-                        .frame(width: 30, height: 30) // Fixed frame
+            // Show run notes if they exist
+            if hasRunNotes {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "note.text")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        .padding(.top, 1)
+                    
+                    Text(run.notes)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .buttonStyle(PlainButtonStyle())
+                .padding(.leading, editMode == .active ? 30 : 0)
+                .padding(.bottom, 4)
             }
         }
-        .padding(.vertical, 4)
     }
 }
 

@@ -1,30 +1,18 @@
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var dataManager = DataManager.shared
     @State private var selectedStartModeIndex = 0
     @State private var debugInfo = ""
+    @State private var showDebugInfo = false
+    @State private var showingClearAlert = false
     
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 15) {
-                // DEBUG INFO AT TOP
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("DEBUG")
-                        .font(.caption2)
-                        .foregroundColor(.red)
-                    ScrollView {
-                        Text(debugInfo)
-                            .font(.system(size: 8, design: .monospaced))
-                            .foregroundColor(.red)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxHeight: 80)
-                }
-                .padding(.horizontal)
-                
-                // START OPTIONS
+                // START OPTIONS - MOVED TO TOP
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Start Method")
                         .font(.headline)
@@ -42,7 +30,6 @@ struct SettingsView: View {
                     .labelsHidden()
                     .onChange(of: selectedStartModeIndex) { _, newValue in
                         dataManager.startMode = StartMode.allCases[newValue]
-                        Task { await updateDebugInfo() }
                     }
                     
                     if dataManager.startMode == .countdown {
@@ -61,9 +48,6 @@ struct SettingsView: View {
                             .pickerStyle(.wheel)
                             .frame(height: 70)
                             .labelsHidden()
-                            .onChange(of: dataManager.countdownTime) { _, _ in
-                                Task { await updateDebugInfo() }
-                            }
                         }
                     }
                     
@@ -90,10 +74,6 @@ struct SettingsView: View {
                         Toggle("Altitude Tracking", isOn: $dataManager.trackAltitude)
                     }
                     .padding(.horizontal)
-                    .onChange(of: dataManager.useGPS) { _, _ in Task { await updateDebugInfo() } }
-                    .onChange(of: dataManager.useHealthKit) { _, _ in Task { await updateDebugInfo() } }
-                    .onChange(of: dataManager.trackWeather) { _, _ in Task { await updateDebugInfo() } }
-                    .onChange(of: dataManager.trackAltitude) { _, _ in Task { await updateDebugInfo() } }
                 }
                 
                 Divider()
@@ -110,8 +90,6 @@ struct SettingsView: View {
                         Toggle("Save GPS Time", isOn: $dataManager.saveGPSTime)
                     }
                     .padding(.horizontal)
-                    .onChange(of: dataManager.saveTapTime) { _, _ in Task { await updateDebugInfo() } }
-                    .onChange(of: dataManager.saveGPSTime) { _, _ in Task { await updateDebugInfo() } }
                     
                     if dataManager.saveTapTime && dataManager.saveGPSTime {
                         Text("Both tap and GPS times will be recorded")
@@ -136,6 +114,56 @@ struct SettingsView: View {
                 }
                 .padding(.horizontal)
                 .padding(.top, 10)
+                
+                // DEBUG INFO AT BOTTOM - COLLAPSIBLE
+                VStack(alignment: .leading, spacing: 5) {
+                    Button(action: {
+                        showDebugInfo.toggle()
+                        if showDebugInfo {
+                            Task { await updateDebugInfo() }
+                        }
+                    }) {
+                        HStack {
+                            Text("DEBUG INFO")
+                                .font(.caption2)
+                                .foregroundColor(.red)
+                            Spacer()
+                            Image(systemName: showDebugInfo ? "chevron.up" : "chevron.down")
+                                .font(.caption2)
+                                .foregroundColor(.red)
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    if showDebugInfo {
+                        ScrollView {
+                            Text(debugInfo)
+                                .font(.system(size: 8, design: .monospaced))
+                                .foregroundColor(.red)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxHeight: 100)
+                        .padding(.horizontal)
+                    }
+                }
+                .padding(.top, 10)
+                
+                // DELETE ALL DATA - AT BOTTOM
+                Divider()
+                    .padding(.vertical, 8)
+
+                Button(action: {
+                    showingClearAlert = true
+                }) {
+                    Text("Delete All Data")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                }
+                .padding(.horizontal)
+                .padding(.top, 4)
             }
             .padding(.vertical)
         }
@@ -143,7 +171,18 @@ struct SettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             setupInitialState()
-            Task { await updateDebugInfo() }
+        }
+        .onDisappear {
+            // Force save when view disappears
+            dataManager.defaults.synchronize()
+        }
+        .alert("Delete All Data?", isPresented: $showingClearAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                Task { await clearAllData() }
+            }
+        } message: {
+            Text("This will permanently delete all runs and daily notes. This action cannot be undone.")
         }
     }
     
@@ -157,5 +196,26 @@ struct SettingsView: View {
     private func updateDebugInfo() async {
         debugInfo = await dataManager.getDebugInfo()
         print(debugInfo)
+    }
+    
+    @MainActor
+    private func clearAllData() async {
+        let modelContext = dataManager.modelContainer.mainContext
+        do {
+            // Delete all runs
+            let descriptor = FetchDescriptor<Run>()
+            let runs = try modelContext.fetch(descriptor)
+            for run in runs { modelContext.delete(run) }
+            try modelContext.save()
+
+            // Clear daily notes
+            DailyNotesManager.shared.clearAllNotes()
+
+            // Refresh debug info
+            await updateDebugInfo()
+            print("✅ All data cleared (watch settings)")
+        } catch {
+            print("❌ Error clearing all data: \(error)")
+        }
     }
 }

@@ -49,6 +49,8 @@ struct HistoryView: View {
                                 selectedDate = day
                             }) {
                                 DayRow(date: day, runs: runsByDay[day] ?? [])
+                                    .frame(maxWidth: .infinity, alignment: .leading) // Make button fill entire row width
+                                    .contentShape(Rectangle()) // Make entire area tappable
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
@@ -87,19 +89,42 @@ struct DayRow: View {
     }
     
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(dateFormatter.string(from: date))
-                    .font(.system(size: 14, weight: .medium))
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(dateFormatter.string(from: date))
+                        .font(.system(size: 14, weight: .medium))
+                    
+                    Text("\(runs.count) runs")
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
+                }
                 
-                Text("\(runs.count) runs")
-                    .font(.system(size: 12))
-                    .foregroundColor(.gray)
+                Spacer()
+                
+                // Notes icon
+                Image(systemName: hasDayNotes ? "note.text" : "note.text")
+                    .font(.system(size: 16))
+                    .foregroundColor(hasDayNotes ? .blue : .gray)
             }
             
-            Spacer()
-            
-            // Removed day notes icon from here - only show in detail view
+            // Show day notes if they exist
+            if hasDayNotes {
+                let dayNoteText = dailyNotesManager.getNote(for: date)
+                if !dayNoteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    HStack(alignment: .top, spacing: 4) {
+                        Image(systemName: "note.text")
+                            .font(.system(size: 10))
+                            .foregroundColor(.blue)
+                            .padding(.top, 1)
+                        
+                        Text(dayNoteText)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
         }
         .padding(.vertical, 4)
     }
@@ -111,6 +136,22 @@ struct DayDetailView: View {
     let runs: [Run]
     let onBack: () -> Void
     @StateObject private var dailyNotesManager = DailyNotesManager.shared
+    @State private var selectedRun: Run?
+    @State private var activeSheet: ActiveSheet?
+    
+    enum ActiveSheet: Identifiable {
+        case run(Run)
+        case day(Date)
+        
+        var id: String {
+            switch self {
+            case .run(let run):
+                return "run-\(run.id.uuidString)"
+            case .day(let date):
+                return "day-\(date.timeIntervalSince1970)"
+            }
+        }
+    }
     
     var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
@@ -154,57 +195,121 @@ struct DayDetailView: View {
             .padding(.horizontal)
             .padding(.top, -45)  // Move X up to be level with clock
             
-            // Date with notes icon
-            HStack(spacing: 6) {
-                Text(dateFormatter.string(from: date))
-                    .font(.system(size: 18, weight: .semibold))  // Bigger font
-                
-                // Day notes icon
-                Image(systemName: hasDayNotes ? "note.text" : "note.text")
-                    .font(.system(size: 18))
-                    .foregroundColor(hasDayNotes ? .blue : .gray)
+            // Date with notes icon - make tappable for day notes
+            Button(action: {
+                activeSheet = .day(date)
+            }) {
+                HStack(spacing: 6) {
+                    Text(dateFormatter.string(from: date))
+                        .font(.system(size: 18, weight: .semibold))  // Bigger font
+                    
+                    // Day notes icon
+                    Image(systemName: hasDayNotes ? "note.text" : "note.text")
+                        .font(.system(size: 18))
+                        .foregroundColor(hasDayNotes ? .blue : .gray)
+                }
             }
-            .padding(.top, -15)  // Move date up behind clock
+            .buttonStyle(PlainButtonStyle())
+            .padding(.top, -20)  // Move date up behind clock
             
             // Stats
-            HStack(spacing: 40) {
-                VStack(spacing: 1) {
+            HStack(spacing: 18) {
+                HStack(spacing: 3) {
+                    Text("Runs")
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
+                        .rotationEffect(.degrees(-90))
                     Text("\(runs.count)")
                         .font(.system(size: 36, weight: .bold))
-                    Text("Runs")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .layoutPriority(1)
                 }
                 
-                VStack(spacing: 1) {
+                HStack(spacing: 3) {
+                    Text("Avg")
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
+                        .rotationEffect(.degrees(-90))
                     Text(averageTime)
                         .font(.system(size: 36, weight: .bold))
-                    Text("Avg")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .layoutPriority(1)
                 }
             }
-            .padding(.top, 8)  // Tighter padding from date
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal)
+            .padding(.vertical, 4)
             
-            // Runs list with notes icons
+            // Day note preview under stats (one line, tappable to edit)
+            if hasDayNotes {
+                let dayNoteText = dailyNotesManager.getNote(for: date).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !dayNoteText.isEmpty {
+                    Button(action: { activeSheet = .day(date) }) {
+                        HStack(alignment: .center, spacing: 6) {
+                            Image(systemName: "note.text")
+                                .font(.system(size: 12))
+                                .foregroundColor(.blue)
+                            Text(dayNoteText)
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .padding(.horizontal)
+                    .padding(.top, 4)
+                }
+            }
+            
+            // Runs list with notes - make entire rows tappable
             List {
                 ForEach(runs) { run in
-                    HStack {
-                        Text("\(run.distance)m")
-                            .font(.system(size: 12))
-                            .foregroundColor(.gray)
-                        
-                        Spacer()
-                        
-                        Text(run.formattedTime)
-                            .font(.system(size: 28, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                        
-                        // Run notes icon
-                        Image(systemName: run.notes.isEmpty ? "note.text" : "note.text")
-                            .font(.system(size: 18))
-                            .foregroundColor(run.notes.isEmpty ? .gray : .blue)
+                    Button(action: {
+                        selectedRun = run
+                        activeSheet = .run(run)
+                    }) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text("\(run.distance)m")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.gray)
+                                
+                                Spacer()
+                                
+                                Text(run.formattedTime)
+                                    .font(.system(size: 28, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.white)
+                                
+                                // Run notes icon
+                                Image(systemName: run.notes.isEmpty ? "note.text" : "note.text")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(run.notes.isEmpty ? .gray : .blue)
+                            }
+                            
+                            // Show run notes if they exist
+                            if !run.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                HStack(alignment: .top, spacing: 4) {
+                                    Image(systemName: "note.text")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.blue)
+                                        .padding(.top, 1)
+                                    
+                                    Text(run.notes)
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(PlainButtonStyle())
                     .padding(.vertical, 6)
                 }
                 .onDelete(perform: deleteRuns)
@@ -213,6 +318,14 @@ struct DayDetailView: View {
             .padding(.top, 8)
         }
         .navigationBarHidden(true)  // Hide the default navigation bar
+        .sheet(item: $activeSheet) { item in
+            switch item {
+            case .run(let run):
+                WatchRunNotesView(run: run)
+            case .day(let date):
+                WatchDayNotesView(date: date)
+            }
+        }
     }
     
     private func deleteRuns(offsets: IndexSet) {
@@ -223,3 +336,145 @@ struct DayDetailView: View {
         }
     }
 }
+
+// Watch-specific Run Notes View
+struct WatchRunNotesView: View {
+    let run: Run
+    @Environment(\.dismiss) private var dismiss
+    @State private var noteText = ""
+    @FocusState private var isTextFieldFocused: Bool
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 8) {
+                Text("Run Notes")
+                    .font(.system(size: 14, weight: .bold))
+                
+                Text("\(run.distance)m - \(run.formattedTime)")
+                    .font(.system(size: 12))
+                    .foregroundColor(.gray)
+                
+                TextField("Add run notes...", text: $noteText, axis: .vertical)
+                    .font(.system(size: 12))
+                    .focused($isTextFieldFocused)
+                    .textInputAutocapitalization(.sentences)
+                    .disableAutocorrection(true)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.gray.opacity(0.2))
+                    .cornerRadius(8)
+                    .padding(.horizontal)
+                
+                HStack(spacing: 12) {
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Text("Cancel")
+                            .font(.system(size: 12))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    
+                    Button(action: {
+                        saveRunNotes()
+                    }) {
+                        Text("Save")
+                            .font(.system(size: 12))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(.horizontal)
+            }
+            .padding(.vertical, 8)
+        }
+        .onAppear {
+            noteText = run.notes
+            
+            // Focus the text field
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                isTextFieldFocused = true
+            }
+        }
+    }
+    
+    private func saveRunNotes() {
+        run.notes = noteText
+        
+        do {
+            try DataManager.shared.modelContainer.mainContext.save()
+            dismiss()
+        } catch {
+            print("Error saving run notes: \(error)")
+        }
+    }
+}
+
+// Watch-specific Day Notes View  
+struct WatchDayNotesView: View {
+    let date: Date
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var dailyNotesManager = DailyNotesManager.shared
+    @State private var noteText = ""
+    @FocusState private var isTextFieldFocused: Bool
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 8) {
+                Text("Day Notes")
+                    .font(.system(size: 14, weight: .bold))
+                
+                Text(date, style: .date)
+                    .font(.system(size: 12))
+                    .foregroundColor(.gray)
+                
+                TextField("Add day notes...", text: $noteText, axis: .vertical)
+                    .font(.system(size: 12))
+                    .focused($isTextFieldFocused)
+                    .textInputAutocapitalization(.sentences)
+                    .disableAutocorrection(true)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.gray.opacity(0.2))
+                    .cornerRadius(8)
+                    .padding(.horizontal)
+                
+                HStack(spacing: 12) {
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Text("Cancel")
+                            .font(.system(size: 12))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    
+                    Button(action: {
+                        saveDayNotes()
+                    }) {
+                        Text("Save")
+                            .font(.system(size: 12))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(.horizontal)
+            }
+            .padding(.vertical, 8)
+        }
+        .onAppear {
+            noteText = dailyNotesManager.getNote(for: date)
+            
+            // Focus the text field
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                isTextFieldFocused = true
+            }
+        }
+    }
+    
+    private func saveDayNotes() {
+        dailyNotesManager.setNote(noteText, for: date)
+        dismiss()
+    }
+}
+

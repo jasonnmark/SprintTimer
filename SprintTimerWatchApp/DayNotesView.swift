@@ -13,12 +13,36 @@ struct DayNotesView: View {
                 Text("Day Notes")
                     .font(.system(size: 14, weight: .bold))
                 
-                ScrollView {
-                    TextField("Add day notes...", text: $noteText)
+#if os(watchOS)
+                TextField("Add day notes...", text: $noteText, axis: .vertical)
+                    .font(.system(size: 12))
+                    .focused($isTextFieldFocused)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.gray.opacity(0.2))
+                    .cornerRadius(8)
+                    .padding(.horizontal)
+#else
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $noteText)
                         .font(.system(size: 12))
                         .focused($isTextFieldFocused)
-                        .padding(.horizontal)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                    
+                    if noteText.isEmpty {
+                        Text("Add day notes...")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 12)
+                            .allowsHitTesting(false)
+                    }
                 }
+                .padding(.horizontal)
+#endif
                 
                 HStack(spacing: 12) {
                     Button(action: {

@@ -317,7 +317,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         
         do {
             // Fetch ALL runs, no predicate
-            let descriptor = FetchDescriptor<Run>(sortBy: [SortDescriptor(\.elapsedTime)])
+            let descriptor = FetchDescriptor<Run>(sortBy: [SortDescriptor(\.date, order: .reverse)])
             let allRuns = try modelContext.fetch(descriptor)
             
             // Filter manually in Swift
@@ -325,19 +325,20 @@ class SprintTimerViewModel: NSObject, ObservableObject {
                 run.distance == self.selectedDistance && run.date > oneMonthAgo
             }
             
-            // Need at least one previous run to compare
-            guard !recentRuns.isEmpty else {
+            // Need at least 3 previous runs to compare
+            guard recentRuns.count >= 3 else {
                 return (false, "")
             }
             
-            // Get the personal best (fastest time)
-            let personalBest = recentRuns.first!.elapsedTime
+            // Calculate the median time of recent runs (better than using just the fastest)
+            let sortedTimes = recentRuns.map { $0.elapsedTime }.sorted()
+            let medianTime = sortedTimes[sortedTimes.count / 2]
             
-            // Check if current run is too slow or too fast
-            if elapsedTime > personalBest * 2.0 {
-                return (true, "Over 2x slower than recent best")
-            } else if elapsedTime < personalBest * 0.7 {
-                return (true, "Under 70% of recent best time")
+            // Check if current run is too slow or too fast compared to typical performance
+            if elapsedTime > medianTime * 1.5 {
+                return (true, "Over 50% slower than recent typical time")
+            } else if elapsedTime < medianTime * 0.6 {
+                return (true, "Under 60% of recent typical time")
             }
             
             return (false, "")

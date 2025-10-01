@@ -1,4 +1,15 @@
+/// TimerView interaction goals:
+/// 0) Downpress on start screen:
+///    - Dark green start screen
+///    - Timer starts instantly but is not displayed
+/// 1) Release before 3 seconds on start screen:
+///    - Go to timer screen showing however long has passed
+/// 2) At 3 second mark (while still holding on start screen):
+///    - Switch to home menu
+///    - Timer reset
+
 import SwiftUI
+import SwiftData
 import WatchKit
 
 struct TimerView: View {
@@ -6,123 +17,86 @@ struct TimerView: View {
     @State private var showingOutlierAlert = false
     @State private var outlierReason = ""
     @State private var showingPauseMenu = false
-    @State private var pauseButtonTimer: Timer?
-    @State private var isPauseButtonPressed = false
-    @State private var pauseHoldProgress: CGFloat = 0
-    @State private var holdStartTime: Date?
-    @State private var isTrackingPauseGesture = false
+    @State private var tapHandled = false
+    @State private var isInLongPressMode = false
+    @State private var timerStartedButHidden = false
+    @State private var menuWorkItem: DispatchWorkItem?
+    @State private var showingRunActionMenu = false
+    @State private var pendingStopWasOutlier = false
+    @State private var lockRunningAppearance = false
     
     var body: some View {
         ZStack {
-            // Main timer content
-            if !viewModel.isRunning && !viewModel.isWaitingForMotion && !viewModel.isInCountdown {
-                // Start Button - Full Screen
-                ZStack {
-                    Color.green
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    
+            // Background
+            backgroundColor()
+                .ignoresSafeArea()
+            
+            // Main content - centered on screen
+            VStack {
+                Spacer()
+                
+                if ((!viewModel.isRunning && !viewModel.isWaitingForMotion && !viewModel.isInCountdown) || timerStartedButHidden) && !lockRunningAppearance {
+                    // Start Button - Centered on screen (show even when timer started but hidden)
                     Text("START")
                         .font(.system(size: 50, weight: .bold))
                         .foregroundColor(.white)
-                }
-                .onLongPressGesture(minimumDuration: 0, pressing: { pressing in
-                    if pressing {
-                        viewModel.startRun()
+                } else if viewModel.isWaitingForMotion {
+                    // Waiting for Motion - Centered on screen
+                    VStack(spacing: 8) {
+                        Text("GET READY")
+                            .font(.system(size: 30, weight: .bold))
+                            .foregroundColor(.white)
+                        Text("Move to start")
+                            .font(.system(size: 20))
+                            .foregroundColor(.white.opacity(0.7))
                     }
-                }, perform: {})
-            } else if viewModel.isWaitingForMotion {
-                // Waiting for Motion - Full Screen
-                VStack {
-                    Text("GET READY")
-                        .font(.system(size: 30, weight: .bold))
-                    Text("Move to start")
-                        .font(.system(size: 20))
-                        .foregroundColor(.gray)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.orange)
-            } else if viewModel.isInCountdown {
-                // Countdown - Full Screen
-                VStack {
-                    Text("\(viewModel.countdownValue)")
-                        .font(.system(size: 80, weight: .bold))
-                        .foregroundColor(.white)
-                    Text("Get Ready")
-                        .font(.system(size: 20))
-                        .foregroundColor(.white)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.orange)
-            } else if viewModel.isRunning {
-                // Timer Running - Full Screen
-                Button(action: {
-                    // Quick tap on timer - stop and check for outlier
-                    // Only allow tap if not tracking pause gesture
-                    if !isTrackingPauseGesture {
-                        let outlierCheck = viewModel.stopRun(modelContext: DataManager.shared.modelContainer.mainContext)
-                        if outlierCheck.isOutlier {
-                            outlierReason = outlierCheck.reason
-                            showingOutlierAlert = true
-                        }
-                    }
-                }) {
-                    Text(viewModel.formattedTime)
-                        .font(.system(size: 60, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color.blue)
-                }
-                .buttonStyle(PlainButtonStyle())
-                .disabled(isTrackingPauseGesture)
-            }
-        }
-        .overlay(
-            // Pause button overlay - always visible
-            VStack {
-                HStack {
-                    // Pause button with hold detection
-                    ZStack {
-                        // Background
-                        Circle()
-                            .fill(Color.black.opacity(0.6))
-                            .frame(width: 50, height: 50)
-                        
-                        // Progress ring - only show when actively pressing
-                        if isPauseButtonPressed {
-                            Circle()
-                                .trim(from: 0, to: pauseHoldProgress)
-                                .stroke(Color.white, lineWidth: 3)
-                                .frame(width: 46, height: 46)
-                                .rotationEffect(.degrees(-90))
-                        }
-                        
-                        // Icon
-                        Image(systemName: "pause.fill")
-                            .font(.system(size: 24))
+                } else if viewModel.isInCountdown {
+                    // Countdown - Centered on screen
+                    VStack(spacing: 8) {
+                        Text("\(viewModel.countdownValue)")
+                            .font(.system(size: 80, weight: .bold))
+                            .foregroundColor(.white)
+                        Text("Get Ready")
+                            .font(.system(size: 20))
                             .foregroundColor(.white)
                     }
-                    .scaleEffect(isPauseButtonPressed ? 1.2 : 1.0)
-                    .animation(.easeInOut(duration: 0.1), value: isPauseButtonPressed)
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { _ in
-                                if !isPauseButtonPressed && !isTrackingPauseGesture {
-                                    isTrackingPauseGesture = true
-                                    handlePausePress(true)
-                                }
-                            }
-                            .onEnded { _ in
-                                handlePausePress(false)
-                            }
-                    )
-                    
-                    Spacer()
+                } else if ((viewModel.isRunning && !timerStartedButHidden) || lockRunningAppearance) {
+                    // Timer Running - Centered on screen (only show when not hidden)
+                    VStack(spacing: 4) {
+                        // Split formattedTime into integer and fractional parts
+                        let parts = splitFormattedTime(viewModel.formattedTime)
+                        
+                        Text(parts.seconds)
+                            .font(.system(size: 60, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
+                        
+                        Text(parts.fraction)
+                            .font(.system(size: 28, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
+                    }
                 }
-                .padding()
                 
                 Spacer()
             }
-        )
+            
+            // "Long press for menu" text - Only show when not running
+            if !viewModel.isRunning && !lockRunningAppearance {
+                VStack {
+                    Spacer()
+                    Text("long press for menu")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(.bottom, 8)
+                }
+            }
+        }
+        .contentShape(Rectangle()) // Makes entire ZStack tappable for gestures
+        .gesture(combinedGesture())
+        .onDisappear { menuWorkItem?.cancel(); menuWorkItem = nil }
         .fullScreenCover(isPresented: $showingOutlierAlert) {
             OutlierAlertView(
                 reason: outlierReason,
@@ -156,77 +130,153 @@ struct TimerView: View {
                 }
             )
         }
+        .overlay(
+            Group {
+                if showingRunActionMenu {
+                    RunningActionMenuView(
+                        onSave: {
+                            viewModel.saveCurrentRun(modelContext: DataManager.shared.modelContainer.mainContext)
+                            viewModel.resetTimer()
+                            // Clear local UI/gesture state
+                            showingRunActionMenu = false
+                            lockRunningAppearance = false
+                            tapHandled = false
+                            isInLongPressMode = false
+                            timerStartedButHidden = false
+                            menuWorkItem?.cancel(); menuWorkItem = nil
+                        },
+                        onDelete: {
+                            viewModel.resetTimer()
+                            showingRunActionMenu = false
+                            lockRunningAppearance = false
+                            tapHandled = false
+                            isInLongPressMode = false
+                            timerStartedButHidden = false
+                            menuWorkItem?.cancel(); menuWorkItem = nil
+                        },
+                        onSaveWithNotes: {
+                            // Do NOT save or reset yet — let the notes screen save the run once submitted
+                            // Dismiss the action menu and clear any running UI lock/state
+                            lockRunningAppearance = false
+                            showingRunActionMenu = false
+                            tapHandled = false
+                            isInLongPressMode = false
+                            timerStartedButHidden = false
+                            menuWorkItem?.cancel(); menuWorkItem = nil
+                            // Present the notes editor directly; it will save the run on submission
+                            NotificationCenter.default.post(name: Notification.Name("ShowRunNotes"), object: nil)
+                        }
+                    )
+                    .ignoresSafeArea()
+                }
+            }
+        )
     }
     
-    private func handlePausePress(_ pressing: Bool) {
-        if pressing {
-            // Start tracking the hold immediately
-            startPauseHoldAnimation()
-            
-            // Also start the timer if not already running
-            if !viewModel.isRunning && !viewModel.isWaitingForMotion && !viewModel.isInCountdown {
-                viewModel.startRun()
-            }
-        } else {
-            // Released
-            isTrackingPauseGesture = false
-            if isPauseButtonPressed {
-                cancelPauseHold()
-            }
-        }
-    }
-    
-    private func startPauseHoldAnimation() {
-        isPauseButtonPressed = true
-        holdStartTime = Date()
-        pauseHoldProgress = 0
-        
-        // Animate progress over 2 seconds
-        withAnimation(.linear(duration: 2.0)) {
-            pauseHoldProgress = 1.0
-        }
-        
-        // Start timer for feedback
-        var count = 0
-        pauseButtonTimer?.invalidate()
-        pauseButtonTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
-            count += 1
-            WKInterfaceDevice.current().play(.click)
-            if count >= 2 {
-                timer.invalidate()
-                // Call completion on the 2nd tick
-                DispatchQueue.main.async {
-                    if self.isPauseButtonPressed {
-                        self.handlePauseHoldComplete()
+    /// Combined drag gesture used to detect downpress and long-press.
+    /// - On first finger down in START state (not running, not waiting, not countdown):
+    ///   - Sets `isInLongPressMode = true` to tint background dark green (Goal 0)
+    ///   - Calls `viewModel.startRun()` and sets `timerStartedButHidden = true` to start the timer without showing it (Goal 0)
+    ///   - Schedules a 1.5s `DispatchWorkItem` to detect a sustained hold and present the menu, resetting the timer (Goal 2)
+    /// - On finger up before 3s:
+    ///   - Cancels the work item, exits long-press mode, and reveals the running timer (Goal 1)
+    /// - If already running (timer visible), a downpress immediately stops the run and presents a Save/Delete/Save with Notes menu (no home menu, no delay)
+    private func combinedGesture() -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { _ in
+                // Only handle the first change event (finger down)
+                if !tapHandled {
+                    tapHandled = true
+                    isInLongPressMode = true // Enter long press mode on finger down
+                    
+                    // Handle both START and STOP on finger down
+                    if !viewModel.isRunning && !viewModel.isWaitingForMotion && !viewModel.isInCountdown {
+                        // Defensive: ensure no timer is running and elapsed is zero before starting
+                        if viewModel.isRunning {
+                            print("❌ TimerView: Attempted to start while already running. Forcing reset.")
+                            viewModel.resetTimer()
+                        }
+                        assert(!viewModel.isRunning, "TimerView: startRun called while already running")
+                        // Force a clean start from 0
+                        viewModel.resetTimer()
+                        
+                        // Goal 0: Start immediately but keep the timer display hidden while finger is down
+                        viewModel.startRun()
+                        timerStartedButHidden = true
+                        
+                        // Only start long press timer for menu in START state
+                        // Cancel any pending work item from a previous press
+                        menuWorkItem?.cancel()
+                        // Goal 2: If the downpress is held for 1.5 seconds, reset and show the home menu
+                        let work = DispatchWorkItem {
+                            // Check current flags at fire time to avoid stale triggers
+                            if self.tapHandled && self.isInLongPressMode {
+                                // Long press in START state: discard run and show menu
+                                // IMPORTANT: DO NOT CHANGE - This properly resets the stopwatch
+                                viewModel.resetTimer()
+                                self.showingPauseMenu = true
+                                // Exit long-press mode and clear temporary state
+                                self.tapHandled = false
+                                self.isInLongPressMode = false
+                                self.timerStartedButHidden = false
+                                // Clear reference to the completed work item
+                                self.menuWorkItem = nil
+                            }
+                        }
+                        menuWorkItem = work
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
+                    } else if viewModel.isRunning && !timerStartedButHidden {
+                        // RUNNING: On finger down, stop the run at this exact time (start of long-press)
+                        // and present a custom action menu to Save or Delete. Do not show home menu here.
+                        let result = viewModel.stopRun(modelContext: DataManager.shared.modelContainer.mainContext)
+                        // Store whether this was considered an outlier; if so, we'll save explicitly on confirmation.
+                        pendingStopWasOutlier = result.isOutlier
+                        // Present the run action menu (three options: Save Run, Delete Run, Save with Notes)
+                        showingRunActionMenu = true
+                        lockRunningAppearance = true
+                        // Do NOT show the outlier alert here and do NOT navigate to home menu.
+                        // NO long press behavior in RUNNING state beyond presenting this menu
                     }
                 }
             }
+            .onEnded { _ in
+                menuWorkItem?.cancel()
+                menuWorkItem = nil
+                
+                // Exit long press mode and reveal timer when finger is lifted
+                isInLongPressMode = false
+                tapHandled = false
+                
+                // Goal 1: If the timer was started while hidden, reveal it (show elapsed time)
+                if timerStartedButHidden {
+                    timerStartedButHidden = false
+                }
+            }
+    }
+    
+    /// Background color reflects state; in START long-press, dark green indicates finger down (Goal 0)
+    private func backgroundColor() -> Color {
+        if lockRunningAppearance { return isInLongPressMode ? Color.blue.opacity(0.5) : Color.blue }
+        if (!viewModel.isRunning && !viewModel.isWaitingForMotion && !viewModel.isInCountdown) || timerStartedButHidden {
+            // START state or timer started but hidden - show dark green when in long press mode
+            return isInLongPressMode ? Color.green.opacity(0.5) : Color.green
+        } else if viewModel.isWaitingForMotion || viewModel.isInCountdown {
+            return Color.orange
+        } else if viewModel.isRunning && !timerStartedButHidden {
+            // Only show blue when timer is visible
+            return isInLongPressMode ? Color.blue.opacity(0.5) : Color.blue
         }
+        return Color.black
     }
     
-    private func cancelPauseHold() {
-        // Cancel the hold animation
-        isPauseButtonPressed = false
-        pauseHoldProgress = 0
-        pauseButtonTimer?.invalidate()
-        pauseButtonTimer = nil
-        isTrackingPauseGesture = false
-    }
-    
-    private func handlePauseHoldComplete() {
-        pauseButtonTimer?.invalidate()
-        WKInterfaceDevice.current().play(.success)
-        
-        // Always reset timer - this stops any running timer and discards data
-        viewModel.resetTimer()
-        
-        // Make sure pause button state is reset
-        isPauseButtonPressed = false
-        pauseHoldProgress = 0
-        isTrackingPauseGesture = false
-        
-        // Show pause menu
-        showingPauseMenu = true
+    private func splitFormattedTime(_ time: String) -> (seconds: String, fraction: String) {
+        if let dotIndex = time.firstIndex(of: ".") {
+            let secondsPart = String(time[..<dotIndex])
+            let fractionPart = String(time[dotIndex...])
+            return (secondsPart, fractionPart)
+        } else {
+            return (time, "")
+        }
     }
 }
 
@@ -279,7 +329,6 @@ struct OutlierAlertView: View {
 }
 
 struct PauseMenuView: View {
-    @Environment(\.dismiss) var dismiss
     let onHome: () -> Void
     let onDayNotes: () -> Void
     let onRunNotes: () -> Void
@@ -349,3 +398,101 @@ struct PauseMenuView: View {
         }
     }
 }
+
+struct RunningActionMenuView: View {
+    let onSave: () -> Void
+    let onDelete: () -> Void
+    let onSaveWithNotes: () -> Void
+    @State private var pressStart: Date? = nil
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.9).ignoresSafeArea()
+            VStack(spacing: 10) {
+                Spacer(minLength: 24)
+
+                // Save Run button (first)
+                Button(action: onSave) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 21))
+                            .padding(.leading, 8)
+                        Text("Save Run")
+                            .font(.system(size: 17, weight: .semibold))
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+                    .padding(.trailing, 8)
+                    .background(Color.green.opacity(0.75))
+                    .cornerRadius(10)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .padding(.horizontal, 8)
+
+                // Save with Run Notes button (second)
+                Button(action: onSaveWithNotes) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "pencil.and.list.clipboard")
+                            .font(.system(size: 21))
+                            .padding(.leading, 8)
+                        Text("Save w/Notes")
+                            .font(.system(size: 17, weight: .semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.9)
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+                    .padding(.trailing, 8)
+                    .background(Color.blue.opacity(0.75))
+                    .cornerRadius(10)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .padding(.horizontal, 8)
+
+                // Delete Run button (third)
+                Button(action: onDelete) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "trash.fill")
+                            .font(.system(size: 21))
+                            .padding(.leading, 8)
+                        Text("Delete")
+                            .font(.system(size: 17, weight: .semibold))
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+                    .padding(.trailing, 8)
+                    .background(Color.red.opacity(0.75))
+                    .cornerRadius(10)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .padding(.horizontal, 8)
+
+                Spacer()
+            }
+        }
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    if pressStart == nil { pressStart = Date() }
+                }
+                .onEnded { _ in
+                    let start = pressStart ?? Date()
+                    let duration = Date().timeIntervalSince(start)
+                    pressStart = nil
+                    if duration < 3.0 {
+                        // Quick click: auto-save
+                        onSave()
+                    }
+                    // If >= 3s, do nothing (buttons remain for explicit choice)
+                }
+        )
+    }
+}
+
