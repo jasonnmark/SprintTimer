@@ -304,10 +304,20 @@ struct RunRowView: View {
                                 .foregroundColor(.blue)
                         }
                         
-                        if let heartRate = run.endHeartRate {
-                            Label("\(Int(heartRate))", systemImage: "heart.fill")
+                        if let startHR = run.startHeartRate {
+                            Label("\(Int(startHR))", systemImage: "heart")
                                 .font(.caption)
                                 .foregroundColor(.red)
+                        }
+                        if let endHR = run.endHeartRate {
+                            Label("\(Int(endHR))", systemImage: "heart.fill")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                        if let steps = run.steps, steps > 0 {
+                            Label("\(steps)", systemImage: "figure.walk")
+                                .font(.caption)
+                                .foregroundColor(.green)
                         }
                     }
                 }

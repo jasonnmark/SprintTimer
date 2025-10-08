@@ -292,6 +292,12 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
                 if let endHeartRate = runData["endHeartRate"] as? Double {
                     run.endHeartRate = endHeartRate
                 }
+                if let steps = runData["steps"] as? Int {
+                    run.steps = steps
+                }
+                if let strideLength = runData["strideLength"] as? Double {
+                    run.strideLength = strideLength
+                }
                 if let temperature = runData["temperature"] as? Double {
                     run.temperature = temperature
                 }
@@ -376,6 +382,8 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
                 if let altitude = run.altitude { data["altitude"] = altitude }
                 if let startHeartRate = run.startHeartRate { data["startHeartRate"] = startHeartRate }
                 if let endHeartRate = run.endHeartRate { data["endHeartRate"] = endHeartRate }
+                if let steps = run.steps { data["steps"] = steps }
+                if let strideLength = run.strideLength { data["strideLength"] = strideLength }
                 if let temperature = run.temperature { data["temperature"] = temperature }
                 if let humidity = run.humidity { data["humidity"] = humidity }
                 
@@ -470,10 +478,11 @@ extension SyncManager {
         if let altitude = run.altitude { data["altitude"] = altitude }
         if let startHeartRate = run.startHeartRate { data["startHeartRate"] = startHeartRate }
         if let endHeartRate = run.endHeartRate { data["endHeartRate"] = endHeartRate }
+        if let steps = run.steps { data["steps"] = steps }
+        if let strideLength = run.strideLength { data["strideLength"] = strideLength }
         if let temperature = run.temperature { data["temperature"] = temperature }
         if let humidity = run.humidity { data["humidity"] = humidity }
         
         return data
     }
 }
-

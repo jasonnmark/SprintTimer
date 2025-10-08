@@ -1,0 +1,80 @@
+{
+  "fill" : {
+    "linear-gradient" : [
+      "srgb:0.24168,0.25042,0.33143,0.68236",
+      "srgb:0.17165,0.15245,0.19541,0.64811"
+    ]
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "fill" : {
+            "linear-gradient" : [
+              "srgb:0.96713,1.00000,0.21909,1.00000",
+              "srgb:1.00000,0.61054,0.32425,1.00000"
+            ]
+          },
+          "hidden" : true,
+          "image-name" : "noun-lightning-426027.svg",
+          "name" : "noun-lightning-426027",
+          "position" : {
+            "scale" : 0.5,
+            "translation-in-points" : [
+              381.2109375,
+              320.08203125
+            ]
+          }
+        },
+        {
+          "fill" : {
+            "linear-gradient" : [
+              "srgb:0.69074,0.94773,0.23403,1.00000",
+              "srgb:0.29296,0.59975,0.39003,1.00000"
+            ]
+          },
+          "image-name" : "noun-runner-3826766.svg",
+          "name" : "noun-runner-3826766",
+          "position" : {
+            "scale" : 0.85,
+            "translation-in-points" : [
+              -96.03125,
+              -102.8984375
+            ]
+          }
+        },
+        {
+          "fill" : {
+            "linear-gradient" : [
+              "srgb:1.00000,0.99992,0.00015,1.00000",
+              "srgb:1.00000,0.68652,0.03807,1.00000"
+            ]
+          },
+          "image-name" : "noun-stopwatch-8075678.svg",
+          "name" : "noun-stopwatch-8075678",
+          "position" : {
+            "scale" : 0.4,
+            "translation-in-points" : [
+              244.4140625,
+              187.91796875
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

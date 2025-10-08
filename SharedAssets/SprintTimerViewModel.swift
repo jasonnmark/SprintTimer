@@ -35,6 +35,8 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     @Published var currentLocation: CLLocation?
     @Published var startHeartRate: Double?
     @Published var endHeartRate: Double?
+    @Published var steps: Int?
+    @Published var strideLength: Double?
     
     private var timer: Timer?
     private var startTime: Date?
@@ -146,6 +148,28 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             // This prevents double-saving
         }
         
+        // Fetch HealthKit metrics at stop
+        if dataManager.useHealthKit, let start = startTime {
+            let end = Date()
+            // Capture ending heart rate (latest sample)
+            fetchLatestHeartRate { [weak self] hr in
+                Task { @MainActor in
+                    self?.endHeartRate = hr
+                }
+            }
+            // Capture steps over the interval and compute stride length
+            fetchSteps(from: start, to: end) { [weak self] count in
+                Task { @MainActor in
+                    self?.steps = count
+                    if let steps = count, steps > 0 {
+                        self?.strideLength = Double(self?.selectedDistance ?? 0) / Double(steps)
+                    } else {
+                        self?.strideLength = nil
+                    }
+                }
+            }
+        }
+        
         return outlierCheck
     }
     
@@ -182,6 +206,10 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         timer = nil
         countdownTimer = nil
         currentRunNotes = "" // Clear run-specific notes
+        startHeartRate = nil
+        endHeartRate = nil
+        steps = nil
+        strideLength = nil
         if dataManager.useGPS {
             locationManager.stopUpdatingLocation()
         }
@@ -194,6 +222,14 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         isInCountdown = false
         isPaused = false
         pausedTime = 0
+        
+        if dataManager.useHealthKit {
+            fetchLatestHeartRate { [weak self] hr in
+                Task { @MainActor in
+                    self?.startHeartRate = hr
+                }
+            }
+        }
         
         // Start location tracking if enabled
         if dataManager.useGPS {
@@ -324,6 +360,8 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         // Add health data if available
         run.startHeartRate = startHeartRate
         run.endHeartRate = endHeartRate
+        run.steps = steps
+        run.strideLength = strideLength
         
         // Use DataManager to save
         dataManager.saveRun(run)
@@ -380,5 +418,45 @@ extension SprintTimerViewModel: CLLocationManagerDelegate {
         Task { @MainActor in
             currentLocation = locations.last
         }
+    }
+}
+
+// MARK: - HealthKit Queries
+extension SprintTimerViewModel {
+    private func fetchLatestHeartRate(completion: @escaping (Double?) -> Void) {
+        guard HKHealthStore.isHealthDataAvailable(),
+              let hrType = HKObjectType.quantityType(forIdentifier: .heartRate) else {
+            completion(nil)
+            return
+        }
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+        let query = HKSampleQuery(sampleType: hrType, predicate: nil, limit: 1, sortDescriptors: [sort]) { _, samples, _ in
+            if let quantitySample = samples?.first as? HKQuantitySample {
+                let unit = HKUnit.count().unitDivided(by: HKUnit.minute())
+                let bpm = quantitySample.quantity.doubleValue(for: unit)
+                completion(bpm)
+            } else {
+                completion(nil)
+            }
+        }
+        healthStore.execute(query)
+    }
+
+    private func fetchSteps(from start: Date, to end: Date, completion: @escaping (Int?) -> Void) {
+        guard HKHealthStore.isHealthDataAvailable(),
+              let stepType = HKObjectType.quantityType(forIdentifier: .stepCount) else {
+            completion(nil)
+            return
+        }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+        let query = HKStatisticsQuery(quantityType: stepType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, statistics, _ in
+            if let sum = statistics?.sumQuantity() {
+                let steps = Int(sum.doubleValue(for: HKUnit.count()))
+                completion(steps)
+            } else {
+                completion(nil)
+            }
+        }
+        healthStore.execute(query)
     }
 }
