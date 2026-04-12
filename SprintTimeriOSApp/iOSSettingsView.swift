@@ -6,45 +6,11 @@ struct iOSSettingsView: View {
     @State private var debugInfo = ""
     @State private var selectedStartModeIndex = 0
     @State private var showingClearAlert = false
+    @State private var weatherAPIKey = ""
     
     var body: some View {
         NavigationView {
             Form {
-                // DEBUG SECTION AT TOP
-                Section(header: Text("Debug Info").foregroundColor(.red)) {
-                    Text(debugInfo)
-                        .font(.system(.caption2, design: .monospaced))
-                        .foregroundColor(.red)
-                        .lineLimit(10)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxHeight: 150)
-                    
-                    Button("Refresh Debug Info") {
-                        Task {
-                            await updateDebugInfo()
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    
-                    Button("Add Test Data") {
-                        Task {
-                            await generateTestData()
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-                    
-                    Text("Adds 10x100m + 3x200m runs")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                    
-                    Button("Clear All Data") {
-                        showingClearAlert = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                }
-                
                 Section(header: Text("Start Options")) {
                     Picker("Start Method", selection: $selectedStartModeIndex) {
                         ForEach(0..<StartMode.allCases.count, id: \.self) { index in
@@ -75,15 +41,68 @@ struct iOSSettingsView: View {
                         .foregroundColor(.gray)
                 }
                 
+                Section(header: Text("Custom Run Types")) {
+                    ForEach(dataManager.customRunTypes) { runType in
+                        HStack {
+                            Text(runType.name)
+                            Spacer()
+                            Text("\(runType.distance)m")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    .onDelete { indexSet in
+                        dataManager.customRunTypes.remove(atOffsets: indexSet)
+                    }
+
+                    NavigationLink("Add Custom Type") {
+                        AddCustomRunTypeView(dataManager: dataManager)
+                    }
+
+                    if dataManager.customRunTypes.isEmpty {
+                        Text("Add custom distances like \"400m Hurdles\" or \"Backwards 100m\"")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
+
                 Section(header: Text("Data Collection")) {
                     Toggle("GPS Verification", isOn: $dataManager.useGPS)
                         .onChange(of: dataManager.useGPS) { _, _ in Task { await updateDebugInfo() } }
                     Toggle("HealthKit Integration", isOn: $dataManager.useHealthKit)
                         .onChange(of: dataManager.useHealthKit) { _, _ in Task { await updateDebugInfo() } }
-                    Toggle("Weather Data", isOn: $dataManager.trackWeather)
-                        .onChange(of: dataManager.trackWeather) { _, _ in Task { await updateDebugInfo() } }
                     Toggle("Altitude Tracking", isOn: $dataManager.trackAltitude)
                         .onChange(of: dataManager.trackAltitude) { _, _ in Task { await updateDebugInfo() } }
+                }
+
+                Section(header: Text("Weather Data")) {
+                    TextField("OpenWeather API Key", text: $weatherAPIKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .onChange(of: weatherAPIKey) { _, newValue in
+                            WeatherService.shared.apiKey = newValue
+                        }
+
+                    if WeatherService.shared.hasAPIKey {
+                        Toggle("Track Weather", isOn: $dataManager.trackWeather)
+                            .onChange(of: dataManager.trackWeather) { _, _ in Task { await updateDebugInfo() } }
+
+                        if dataManager.trackWeather {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Label("Temperature & Feels Like", systemImage: "thermometer")
+                                Label("Humidity & Pressure", systemImage: "cloud")
+                                Label("Wind Speed & Direction", systemImage: "wind")
+                                Label("UV Index", systemImage: "sun.max")
+                                Label("Air Quality (AQI)", systemImage: "aqi.medium")
+                                Label("Weather Condition", systemImage: "cloud.sun")
+                            }
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        }
+                    } else {
+                        Text("Enter your OpenWeather API key to enable weather tracking. Sign up at openweathermap.org (free tier).")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
                 }
                 
                 Section(header: Text("Save Options")) {
@@ -117,12 +136,6 @@ struct iOSSettingsView: View {
                         if dataManager.trackAltitude {
                             Label("Altitude", systemImage: "arrow.up.and.down")
                         }
-                        
-                        if dataManager.trackWeather {
-                            Label("Temperature", systemImage: "thermometer")
-                            Label("Humidity & Pressure", systemImage: "cloud")
-                            Label("Air Quality", systemImage: "aqi.medium")
-                        }
                     }
                     .font(.system(size: 14))
                 }
@@ -131,12 +144,54 @@ struct iOSSettingsView: View {
                     Text("Note: Settings sync every few seconds between devices")
                         .font(.caption)
                         .foregroundColor(.gray)
-                    
+
                     Button("Force Refresh") {
                         dataManager.refresh()
                         Task { await updateDebugInfo() }
                     }
                     .buttonStyle(.bordered)
+                }
+
+                Section(header: Text("Beta")) {
+                    Toggle("Beta Mode", isOn: $dataManager.betaMode)
+
+                    if !dataManager.betaMode {
+                        Text("Enable beta mode to access debug tools and experimental features.")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
+
+                if dataManager.betaMode {
+                    Section(header: Text("Debug Tools").foregroundColor(.red)) {
+                        Text(debugInfo)
+                            .font(.system(.caption2, design: .monospaced))
+                            .foregroundColor(.red)
+                            .lineLimit(10)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxHeight: 150)
+
+                        Button("Refresh Debug Info") {
+                            Task { await updateDebugInfo() }
+                        }
+                        .buttonStyle(.borderedProminent)
+
+                        Button("Add Test Data") {
+                            Task { await generateTestData() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+
+                        Text("Adds 10x100m + 3x200m runs")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+
+                        Button("Clear All Data") {
+                            showingClearAlert = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                    }
                 }
             }
             .navigationTitle("Settings")
@@ -159,10 +214,10 @@ struct iOSSettingsView: View {
     }
     
     private func setupInitialState() {
-        // Set the picker index based on current start mode
         if let index = StartMode.allCases.firstIndex(of: dataManager.startMode) {
             selectedStartModeIndex = index
         }
+        weatherAPIKey = WeatherService.shared.apiKey
     }
     
     private func updateDebugInfo() async {
@@ -309,6 +364,42 @@ struct iOSSettingsView: View {
             await updateDebugInfo()
         } catch {
             print("❌ Error clearing data: \(error)")
+        }
+    }
+}
+
+struct AddCustomRunTypeView: View {
+    @ObservedObject var dataManager: DataManager
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var distanceText = ""
+
+    var body: some View {
+        Form {
+            Section(header: Text("New Custom Run Type")) {
+                TextField("Name (e.g. 400m Hurdles)", text: $name)
+                TextField("Distance in meters", text: $distanceText)
+                    .keyboardType(.numberPad)
+            }
+
+            Section {
+                Text("Custom run types appear in the distance picker on the watch alongside 100m, 200m, and 400m.")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+        }
+        .navigationTitle("Add Custom Type")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Save") {
+                    if let distance = Int(distanceText), !name.isEmpty {
+                        dataManager.customRunTypes.append(CustomRunType(name: name, distance: distance))
+                        dismiss()
+                    }
+                }
+                .disabled(name.isEmpty || Int(distanceText) == nil)
+            }
         }
     }
 }

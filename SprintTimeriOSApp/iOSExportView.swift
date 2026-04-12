@@ -5,8 +5,7 @@ import UniformTypeIdentifiers
 struct iOSExportView: View {
     @Query(sort: \Run.date, order: .reverse) private var runs: [Run]
     @State private var isExporting = false
-    @State private var exportURL: URL?
-    @State private var showingShareSheet = false
+    @State private var exportURL: IdentifiableURL?
     @State private var selectedFormat = 0
     @State private var includeNotes = true
     @State private var includeGPSData = true
@@ -79,12 +78,16 @@ struct iOSExportView: View {
                             .italic()
                     }
                 }
+
+                Section(header: Text("Compatibility")) {
+                    Text("CSV files can be imported into Excel, Google Sheets, Numbers, Strava, and TrainingPeaks. JSON files work with custom analysis tools and databases.")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
             }
             .navigationTitle("Export")
-            .sheet(isPresented: $showingShareSheet) {
-                if let url = exportURL {
-                    ShareSheet(activityItems: [url])
-                }
+            .sheet(item: $exportURL) { item in
+                ShareSheet(activityItems: [item.url])
             }
         }
     }
@@ -108,9 +111,8 @@ struct iOSExportView: View {
             }
             
             DispatchQueue.main.async {
-                self.exportURL = fileURL
                 self.isExporting = false
-                self.showingShareSheet = true
+                self.exportURL = IdentifiableURL(url: fileURL)
             }
         }
     }
@@ -133,7 +135,8 @@ struct iOSExportView: View {
         let longitude: Double?
         let altitude: Double?
         let altitudeGain: Double?
-        
+        let locationName: String?
+
         // Optional health data
         let startHeartRate: Double?
         let endHeartRate: Double?
@@ -174,6 +177,7 @@ struct iOSExportView: View {
                 longitude: run.longitude,
                 altitude: run.altitude,
                 altitudeGain: run.altitudeGain,
+                locationName: run.locationName,
                 startHeartRate: run.startHeartRate,
                 endHeartRate: run.endHeartRate,
                 averageHeartRate: run.averageHeartRate,
@@ -252,17 +256,7 @@ struct iOSExportView: View {
             }
             
             if includeLocationData {
-                // Extract location name from notes if it contains "Location: "
-                var locationName = ""
-                if run.notes.contains("Location: ") {
-                    let components = run.notes.components(separatedBy: " | ")
-                    for component in components {
-                        if component.hasPrefix("Location: ") {
-                            locationName = component.replacingOccurrences(of: "Location: ", with: "")
-                            break
-                        }
-                    }
-                }
+                let locationName = run.locationName ?? ""
                 csvString += ",\"\(locationName)\""
             }
             
@@ -272,42 +266,30 @@ struct iOSExportView: View {
                 csvString += ",\(String(format: "%.6f", run.latitude ?? 0))"
                 csvString += ",\(String(format: "%.6f", run.longitude ?? 0))"
                 csvString += ",\(String(format: "%.1f", run.altitude ?? 0))"
-                csvString += ",0" // Altitude gain - not stored per run yet
+                csvString += ",\(String(format: "%.1f", run.altitudeGain ?? 0))"
             }
             
             if includeHealthData {
                 csvString += ",\(Int(run.startHeartRate ?? 0))"
                 csvString += ",\(Int(run.endHeartRate ?? 0))"
-                csvString += ",0" // Average HR - not stored
-                csvString += ",0" // Max HR - not stored
+                csvString += ",\(Int(run.averageHeartRate ?? 0))"
+                csvString += ",\(Int(run.maxHeartRate ?? 0))"
                 csvString += ",\(run.steps ?? 0)"
                 csvString += ",\(String(format: "%.2f", run.strideLength ?? 0))"
             }
             
             if includeWeatherData {
                 csvString += ",\(String(format: "%.1f", run.temperature ?? 0))"
-                csvString += ",0" // Feels like - not stored
+                csvString += ",\(String(format: "%.1f", run.feelsLike ?? 0))"
                 csvString += ",\(Int(run.humidity ?? 0))"
                 csvString += ",\(Int(run.pressure ?? 0))"
-                csvString += ",0" // Wind speed - not stored in Run model
-                csvString += ",0" // Wind direction - not stored
-                csvString += ",0" // Visibility - not stored
-                csvString += ",0" // UV Index - not stored
-                csvString += ",0" // Dew Point - not stored
-                
-                // Extract weather condition from notes if available
-                var condition = ""
-                if run.notes.contains("Weather: ") {
-                    let components = run.notes.components(separatedBy: " | ")
-                    for component in components {
-                        if component.hasPrefix("Weather: ") {
-                            condition = component.replacingOccurrences(of: "Weather: ", with: "")
-                            break
-                        }
-                    }
-                }
-                csvString += ",\"\(condition)\""
-                csvString += ",0" // AQI - not stored in Run model
+                csvString += ",\(String(format: "%.1f", run.windSpeed ?? 0))"
+                csvString += ",\(Int(run.windDirection ?? 0))"
+                csvString += ",\(Int(run.visibility ?? 0))"
+                csvString += ",\(run.uvIndex ?? 0)"
+                csvString += ",\(String(format: "%.1f", run.dewPoint ?? 0))"
+                csvString += ",\"\(run.weatherCondition ?? "")\""
+                csvString += ",\(run.aqi ?? 0)"
             }
             
             csvString += "\n"
@@ -350,15 +332,8 @@ struct iOSExportView: View {
                 runDict["dayNotes"] = run.dayNote
             }
             
-            // Extract location name from notes
-            if includeLocationData && run.notes.contains("Location: ") {
-                let components = run.notes.components(separatedBy: " | ")
-                for component in components {
-                    if component.hasPrefix("Location: ") {
-                        runDict["locationName"] = component.replacingOccurrences(of: "Location: ", with: "")
-                        break
-                    }
-                }
+            if includeLocationData, let locationName = run.locationName, !locationName.isEmpty {
+                runDict["locationName"] = locationName
             }
             
             if includeGPSData {
@@ -368,6 +343,7 @@ struct iOSExportView: View {
                 if let latitude = run.latitude { gpsData["latitude"] = latitude }
                 if let longitude = run.longitude { gpsData["longitude"] = longitude }
                 if let altitude = run.altitude { gpsData["altitude"] = altitude }
+                if let altitudeGain = run.altitudeGain { gpsData["altitudeGain"] = altitudeGain }
                 if !gpsData.isEmpty { runDict["gpsData"] = gpsData }
             }
             
@@ -375,6 +351,8 @@ struct iOSExportView: View {
                 var healthData: [String: Any] = [:]
                 if let startHR = run.startHeartRate { healthData["startHeartRate"] = startHR }
                 if let endHR = run.endHeartRate { healthData["endHeartRate"] = endHR }
+                if let avgHR = run.averageHeartRate { healthData["averageHeartRate"] = avgHR }
+                if let maxHR = run.maxHeartRate { healthData["maxHeartRate"] = maxHR }
                 if let steps = run.steps { healthData["steps"] = steps }
                 if let strideLength = run.strideLength { healthData["strideLength"] = strideLength }
                 if !healthData.isEmpty { runDict["healthData"] = healthData }
@@ -383,21 +361,16 @@ struct iOSExportView: View {
             if includeWeatherData {
                 var weatherData: [String: Any] = [:]
                 if let temp = run.temperature { weatherData["temperature"] = temp }
+                if let feelsLike = run.feelsLike { weatherData["feelsLike"] = feelsLike }
                 if let humidity = run.humidity { weatherData["humidity"] = humidity }
                 if let pressure = run.pressure { weatherData["pressure"] = pressure }
-                if let altitude = run.altitude { weatherData["altitude"] = altitude }
-                
-                // Extract weather condition from notes
-                if run.notes.contains("Weather: ") {
-                    let components = run.notes.components(separatedBy: " | ")
-                    for component in components {
-                        if component.hasPrefix("Weather: ") {
-                            weatherData["condition"] = component.replacingOccurrences(of: "Weather: ", with: "")
-                            break
-                        }
-                    }
-                }
-                
+                if let windSpeed = run.windSpeed { weatherData["windSpeed"] = windSpeed }
+                if let windDirection = run.windDirection { weatherData["windDirection"] = windDirection }
+                if let visibility = run.visibility { weatherData["visibility"] = visibility }
+                if let uvIndex = run.uvIndex { weatherData["uvIndex"] = uvIndex }
+                if let dewPoint = run.dewPoint { weatherData["dewPoint"] = dewPoint }
+                if let aqi = run.aqi { weatherData["aqi"] = aqi }
+                if let condition = run.weatherCondition { weatherData["condition"] = condition }
                 if !weatherData.isEmpty { runDict["weatherData"] = weatherData }
             }
             
@@ -418,13 +391,26 @@ struct iOSExportView: View {
     }
 }
 
+struct IdentifiableURL: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
 struct ShareSheet: UIViewControllerRepresentable {
     let activityItems: [Any]
-    
+
     func makeUIViewController(context: Context) -> UIActivityViewController {
         let controller = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, _, _, _ in
+            // Clean up temp files after share completes or cancels
+            for item in activityItems {
+                if let url = item as? URL {
+                    try? FileManager.default.removeItem(at: url)
+                }
+            }
+        }
         return controller
     }
-    
+
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

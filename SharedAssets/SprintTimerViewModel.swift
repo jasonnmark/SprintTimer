@@ -35,8 +35,13 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     @Published var currentLocation: CLLocation?
     @Published var startHeartRate: Double?
     @Published var endHeartRate: Double?
+    @Published var averageHeartRate: Double?
+    @Published var maxHeartRate: Double?
     @Published var steps: Int?
     @Published var strideLength: Double?
+
+    // GPS route tracking for distance/speed/altitude gain
+    private var routeLocations: [CLLocation] = []
     
     private var timer: Timer?
     private var startTime: Date?
@@ -157,6 +162,13 @@ class SprintTimerViewModel: NSObject, ObservableObject {
                     self?.endHeartRate = hr
                 }
             }
+            // Capture average and max heart rate during the run
+            fetchHeartRateStats(from: start, to: end) { [weak self] avg, max in
+                Task { @MainActor in
+                    self?.averageHeartRate = avg
+                    self?.maxHeartRate = max
+                }
+            }
             // Capture steps over the interval and compute stride length
             fetchSteps(from: start, to: end) { [weak self] count in
                 Task { @MainActor in
@@ -208,8 +220,11 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         currentRunNotes = "" // Clear run-specific notes
         startHeartRate = nil
         endHeartRate = nil
+        averageHeartRate = nil
+        maxHeartRate = nil
         steps = nil
         strideLength = nil
+        routeLocations = []
         if dataManager.useGPS {
             locationManager.stopUpdatingLocation()
         }
@@ -356,16 +371,88 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             run.longitude = location.coordinate.longitude
             run.altitude = location.altitude
         }
+
+        // Calculate GPS distance, speed, and altitude gain from route
+        if routeLocations.count >= 2 {
+            var totalDistance: CLLocationDistance = 0
+            var minAltitude = routeLocations[0].altitude
+            var maxAltitude = routeLocations[0].altitude
+            var altitudeGain: Double = 0
+
+            for i in 1..<routeLocations.count {
+                totalDistance += routeLocations[i].distance(from: routeLocations[i - 1])
+                let alt = routeLocations[i].altitude
+                if alt > maxAltitude { maxAltitude = alt }
+                if alt < minAltitude { minAltitude = alt }
+                let altDiff = alt - routeLocations[i - 1].altitude
+                if altDiff > 0 { altitudeGain += altDiff }
+            }
+
+            run.actualDistance = totalDistance
+            if elapsedTime > 0 {
+                run.averageSpeed = totalDistance / elapsedTime
+            }
+            run.altitudeGain = altitudeGain
+        }
         
         // Add health data if available
         run.startHeartRate = startHeartRate
         run.endHeartRate = endHeartRate
+        run.averageHeartRate = averageHeartRate
+        run.maxHeartRate = maxHeartRate
         run.steps = steps
         run.strideLength = strideLength
         
+        // Reverse geocode location name
+        if let location = currentLocation {
+            let geocoder = CLGeocoder()
+            geocoder.reverseGeocodeLocation(location) { placemarks, error in
+                if let placemark = placemarks?.first {
+                    let parts = [placemark.locality, placemark.administrativeArea].compactMap { $0 }
+                    let name = parts.joined(separator: ", ")
+                    if !name.isEmpty {
+                        Task { @MainActor in
+                            run.locationName = name
+                            try? DataManager.shared.modelContainer.mainContext.save()
+                        }
+                    }
+                }
+            }
+        }
+
         // Use DataManager to save
         dataManager.saveRun(run)
-        
+
+        // Fetch weather data asynchronously if enabled and location available
+        if dataManager.trackWeather, let location = currentLocation {
+            Task {
+                async let weatherResult = WeatherService.shared.fetchWeather(for: location)
+                async let aqiResult = WeatherService.shared.fetchAQI(for: location)
+
+                if let weather = await weatherResult {
+                    await MainActor.run {
+                        run.temperature = weather.temperature
+                        run.feelsLike = weather.feelsLike
+                        run.humidity = weather.humidity
+                        run.pressure = weather.pressure
+                        run.windSpeed = weather.windSpeed
+                        run.windDirection = weather.windDirection
+                        run.visibility = weather.visibility
+                        run.uvIndex = weather.uvIndex
+                        run.dewPoint = weather.dewPoint
+                        run.weatherCondition = weather.weatherCondition
+                        try? DataManager.shared.modelContainer.mainContext.save()
+                    }
+                }
+                if let aqi = await aqiResult {
+                    await MainActor.run {
+                        run.aqi = aqi.aqi
+                        try? DataManager.shared.modelContainer.mainContext.save()
+                    }
+                }
+            }
+        }
+
         // Stop location updates
         if dataManager.useGPS {
             locationManager.stopUpdatingLocation()
@@ -417,6 +504,10 @@ extension SprintTimerViewModel: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         Task { @MainActor in
             currentLocation = locations.last
+            // Collect route points while running for distance/speed/altitude calculations
+            if isRunning {
+                routeLocations.append(contentsOf: locations)
+            }
         }
     }
 }
@@ -438,6 +529,28 @@ extension SprintTimerViewModel {
             } else {
                 completion(nil)
             }
+        }
+        healthStore.execute(query)
+    }
+
+    private func fetchHeartRateStats(from start: Date, to end: Date, completion: @escaping (Double?, Double?) -> Void) {
+        guard HKHealthStore.isHealthDataAvailable(),
+              let hrType = HKObjectType.quantityType(forIdentifier: .heartRate) else {
+            completion(nil, nil)
+            return
+        }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+        let query = HKSampleQuery(sampleType: hrType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+            guard let hrSamples = samples as? [HKQuantitySample], !hrSamples.isEmpty else {
+                completion(nil, nil)
+                return
+            }
+            let unit = HKUnit.count().unitDivided(by: HKUnit.minute())
+            let bpmValues = hrSamples.map { $0.quantity.doubleValue(for: unit) }
+            let avg = bpmValues.reduce(0, +) / Double(bpmValues.count)
+            let max = bpmValues.max()
+            completion(avg, max)
         }
         healthStore.execute(query)
     }

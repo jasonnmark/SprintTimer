@@ -3,32 +3,33 @@ import SwiftData
 
 struct ContentView: View {
     @StateObject private var viewModel = SprintTimerViewModel()
-    @State private var selectedDistance = 100
+    @StateObject private var dataManager = DataManager.shared
+    @State private var selectedDistanceIndex = 0
     @State private var showingSettings = false
     @State private var showingRunner = false
     @State private var showingHistory = false
-    
-    let distances = [100, 200, 400]
-    
+
     var body: some View {
         NavigationView {
             VStack(spacing: 12) {
-                // Distance Selector - Made 10% shorter with no label
-                Picker("", selection: $selectedDistance) {
-                    ForEach(distances, id: \.self) { distance in
-                        Text("\(distance)m")
-                            .tag(distance)
+                // Distance Selector - supports built-in + custom types
+                Picker("", selection: $selectedDistanceIndex) {
+                    ForEach(Array(dataManager.allDistances.enumerated()), id: \.offset) { index, item in
+                        Text(item.label)
+                            .tag(index)
                             .font(.system(size: 28, weight: .semibold))
                     }
                 }
                 .pickerStyle(WheelPickerStyle())
                 .frame(height: 65)
                 .labelsHidden()
-                .padding(.top, 20)  // Increased from 8 to move down from clock
+                .padding(.top, 20)
                 
                 // Start Run Button
                 Button(action: {
-                    viewModel.selectedDistance = selectedDistance
+                    let distances = dataManager.allDistances
+                    let safeIndex = min(selectedDistanceIndex, distances.count - 1)
+                    viewModel.selectedDistance = distances[max(0, safeIndex)].distance
                     showingRunner = true
                 }) {
                     Text("START")
@@ -80,6 +81,69 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showingRunner) {
             RunnerView(viewModel: viewModel, isPresented: $showingRunner)
         }
+        .fullScreenCover(isPresented: Binding(
+            get: { !dataManager.hasSeenTutorial },
+            set: { if !$0 { dataManager.hasSeenTutorial = true } }
+        )) {
+            TutorialView {
+                dataManager.hasSeenTutorial = true
+            }
+        }
+    }
+}
+
+struct TutorialView: View {
+    let onDismiss: () -> Void
+    @State private var page = 0
+
+    private let pages: [(icon: String, title: String, detail: String)] = [
+        ("hand.tap.fill", "Tap to Start", "Tap the green START button to begin timing your sprint."),
+        ("hand.tap.fill", "Tap to Stop", "Tap anywhere on the timer screen to stop. An action menu will appear."),
+        ("square.and.pencil", "Save & Notes", "Choose Save, Save with Notes, or Delete from the menu after each run."),
+        ("gearshape.fill", "Start Modes", "In Settings, choose Countdown, Motion Detection, or Tap to Start.")
+    ]
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Spacer()
+
+            Image(systemName: pages[page].icon)
+                .font(.system(size: 32))
+                .foregroundColor(.green)
+
+            Text(pages[page].title)
+                .font(.system(size: 16, weight: .bold))
+                .multilineTextAlignment(.center)
+
+            Text(pages[page].detail)
+                .font(.system(size: 12))
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 8)
+
+            Spacer()
+
+            if page < pages.count - 1 {
+                Button("Next") {
+                    withAnimation { page += 1 }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+            } else {
+                Button("Get Started") {
+                    onDismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+            }
+
+            if page > 0 {
+                Text("\(page + 1) of \(pages.count)")
+                    .font(.system(size: 10))
+                    .foregroundColor(.gray)
+            }
+        }
+        .padding()
     }
 }
 

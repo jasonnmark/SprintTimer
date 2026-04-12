@@ -62,13 +62,15 @@ struct TimerView: View {
         }
         .alert("Unusual Run Time", isPresented: $showingOutlierAlert) {
             Button("Save Anyway") {
-                // Save the run despite being an outlier
+                // Save the run despite being an outlier, then offer notes
                 viewModel.saveRunData(modelContext: modelContext)
-                viewModel.resetTimer()
                 viewMode = .start
                 savedElapsedTime = 0
                 isInLongPressMode = false
                 tapHandled = false
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: Notification.Name("ShowPostRunNotes"), object: nil)
+                }
             }
             Button("Delete Run", role: .destructive) {
                 // Delete the run and reset
@@ -224,12 +226,14 @@ struct TimerView: View {
     
     private func saveRun() {
         viewModel.saveCurrentRun(modelContext: modelContext)
-        viewModel.resetTimer()
+        // Show post-run notes prompt instead of immediately resetting
         viewMode = .start
         savedElapsedTime = 0
-        // Reset gesture state
         isInLongPressMode = false
         tapHandled = false
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: Notification.Name("ShowPostRunNotes"), object: nil)
+        }
     }
     
     private func deleteRun() {

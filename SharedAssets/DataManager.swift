@@ -6,7 +6,21 @@ import Combine
 import UIKit
 #elseif os(watchOS)
 import WatchKit
+import WidgetKit
 #endif
+
+// Custom run type for user-defined distances
+struct CustomRunType: Codable, Identifiable, Equatable {
+    var id: UUID
+    var name: String
+    var distance: Int
+
+    init(name: String, distance: Int) {
+        self.id = UUID()
+        self.name = name
+        self.distance = distance
+    }
+}
 
 // Add this file to BOTH iPhone and Watch targets
 enum StartMode: String, CaseIterable {
@@ -56,7 +70,56 @@ class DataManager: ObservableObject {
     private let trackAltitudeKey = "settings.trackAltitude"
     private let saveTapTimeKey = "settings.saveTapTime"
     private let saveGPSTimeKey = "settings.saveGPSTime"
-    
+    private let customRunTypesKey = "settings.customRunTypes"
+    private let hasSeenTutorialKey = "settings.hasSeenTutorial"
+    private let openWeatherAPIKeyKey = "settings.openWeatherAPIKey"
+    private let betaModeKey = "settings.betaMode"
+
+    @Published var betaMode: Bool = false {
+        didSet {
+            defaults.set(betaMode, forKey: betaModeKey)
+            defaults.synchronize()
+            if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    SyncManager.shared.syncSettings()
+                }
+            }
+        }
+    }
+
+    @Published var hasSeenTutorial: Bool = false {
+        didSet {
+            defaults.set(hasSeenTutorial, forKey: hasSeenTutorialKey)
+            defaults.synchronize()
+        }
+    }
+
+    // Custom run types
+    @Published var customRunTypes: [CustomRunType] = [] {
+        didSet {
+            guard !isInitializing else { return }
+            saveCustomRunTypes()
+            if !SyncManager.shared.isUpdatingFromSync {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    SyncManager.shared.syncSettings()
+                }
+            }
+        }
+    }
+
+    // All available distances (built-in + custom)
+    var allDistances: [(label: String, distance: Int)] {
+        var result: [(label: String, distance: Int)] = [
+            ("100m", 100),
+            ("200m", 200),
+            ("400m", 400)
+        ]
+        for custom in customRunTypes {
+            result.append((custom.name, custom.distance))
+        }
+        return result
+    }
+
     // Settings Properties
     @Published var startMode: StartMode = .tap {
         didSet {
@@ -115,7 +178,7 @@ class DataManager: ObservableObject {
         }
     }
     
-    @Published var trackWeather: Bool = true {
+    @Published var trackWeather: Bool = false {
         didSet {
             defaults.set(trackWeather, forKey: trackWeatherKey)
             defaults.synchronize() // Force immediate save
@@ -237,7 +300,7 @@ class DataManager: ObservableObject {
             defaults.set(true, forKey: useHealthKitKey)
         }
         if defaults.object(forKey: trackWeatherKey) == nil {
-            defaults.set(true, forKey: trackWeatherKey)
+            defaults.set(false, forKey: trackWeatherKey)
         }
         if defaults.object(forKey: trackAltitudeKey) == nil {
             defaults.set(true, forKey: trackAltitudeKey)
@@ -268,13 +331,28 @@ class DataManager: ObservableObject {
         trackAltitude = defaults.bool(forKey: trackAltitudeKey)
         saveTapTime = defaults.bool(forKey: saveTapTimeKey)
         saveGPSTime = defaults.bool(forKey: saveGPSTimeKey)
+        hasSeenTutorial = defaults.bool(forKey: hasSeenTutorialKey)
+        betaMode = defaults.bool(forKey: betaModeKey)
+        loadCustomRunTypes()
+    }
+
+    private func saveCustomRunTypes() {
+        if let data = try? JSONEncoder().encode(customRunTypes) {
+            defaults.set(data, forKey: customRunTypesKey)
+            defaults.synchronize()
+        }
+    }
+
+    private func loadCustomRunTypes() {
+        if let data = defaults.data(forKey: customRunTypesKey),
+           let types = try? JSONDecoder().decode([CustomRunType].self, from: data) {
+            customRunTypes = types
+        }
     }
     
     func refresh() {
         defaults.synchronize()
         loadSettings()
-        // Remove immediate objectWillChange.send() to prevent ScrollView performance issues
-        // @Published properties will handle updates naturally
     }
     
     // MARK: - Debug Info
@@ -365,14 +443,40 @@ class DataManager: ObservableObject {
         do {
             try modelContainer.mainContext.save()
             print("✅ DataManager: Run saved successfully")
-            
+
             // Sync to other device
             let runData = SyncManager.shared.runToSyncData(run)
             SyncManager.shared.syncNewRun(runData)
-            
+
+            // Update complication data
+            updateComplicationData(lastRun: run)
+
         } catch {
             print("❌ DataManager: Failed to save run: \(error)")
         }
+    }
+
+    @MainActor
+    func updateComplicationData(lastRun: Run) {
+        defaults.set(lastRun.formattedTime, forKey: "complication.lastRunTime")
+        defaults.set(lastRun.distance, forKey: "complication.lastRunDistance")
+
+        // Count today's runs
+        let startOfDay = Calendar.current.startOfDay(for: Date())
+        do {
+            let descriptor = FetchDescriptor<Run>()
+            let allRuns = try modelContainer.mainContext.fetch(descriptor)
+            let todayCount = allRuns.filter { $0.date >= startOfDay }.count
+            defaults.set(todayCount, forKey: "complication.todayRunCount")
+        } catch {
+            print("Error counting today's runs: \(error)")
+        }
+        defaults.synchronize()
+
+        // Reload complications
+        #if os(watchOS)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
     }
     
     @MainActor

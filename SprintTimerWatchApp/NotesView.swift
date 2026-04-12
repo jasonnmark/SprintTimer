@@ -71,9 +71,12 @@ struct NotesView: View {
             } else {
                 // We're creating a new run (original behavior)
                 viewModel.currentRunNotes = noteText
-                // Always save as a new run and reset timer (reverting to previous behavior)
                 viewModel.saveCurrentRun(modelContext: modelContext)
                 viewModel.resetTimer()
+                // Dismiss RunnerView to return to home
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    NotificationCenter.default.post(name: Notification.Name("DismissRunnerView"), object: nil)
+                }
             }
         } else {
             // Cancel: clear editing reference if we were editing

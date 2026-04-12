@@ -57,19 +57,17 @@ struct StartOptionsSection: View {
 struct DataCollectionSection: View {
     let useGPS: Bool
     let useHealthKit: Bool
-    let trackWeather: Bool
     let trackAltitude: Bool
     let onToggleGPS: (Bool) -> Void
     let onToggleHealthKit: (Bool) -> Void
-    let onToggleWeather: (Bool) -> Void
     let onToggleAltitude: (Bool) -> Void
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Data Collection")
                 .font(.headline)
                 .padding(.horizontal)
-            
+
             Group {
                 Toggle("GPS Verification", isOn: Binding(
                     get: { useGPS },
@@ -78,10 +76,6 @@ struct DataCollectionSection: View {
                 Toggle("HealthKit Integration", isOn: Binding(
                     get: { useHealthKit },
                     set: onToggleHealthKit
-                ))
-                Toggle("Weather Data", isOn: Binding(
-                    get: { trackWeather },
-                    set: onToggleWeather
                 ))
                 Toggle("Altitude Tracking", isOn: Binding(
                     get: { trackAltitude },
@@ -223,7 +217,6 @@ struct SettingsContentView: View {
     let onClearAllData: () async -> Void
     let onToggleGPS: (Bool) -> Void
     let onToggleHealthKit: (Bool) -> Void
-    let onToggleWeather: (Bool) -> Void
     let onToggleAltitude: (Bool) -> Void
     let onToggleTapTime: (Bool) -> Void
     let onToggleGPSTime: (Bool) -> Void
@@ -242,11 +235,9 @@ struct SettingsContentView: View {
             DataCollectionSection(
                 useGPS: dataManager.useGPS,
                 useHealthKit: dataManager.useHealthKit,
-                trackWeather: dataManager.trackWeather,
                 trackAltitude: dataManager.trackAltitude,
                 onToggleGPS: onToggleGPS,
                 onToggleHealthKit: onToggleHealthKit,
-                onToggleWeather: onToggleWeather,
                 onToggleAltitude: onToggleAltitude
             )
             
@@ -265,16 +256,32 @@ struct SettingsContentView: View {
                 dataManager: dataManager,
                 onUpdateDebugInfo: onUpdateDebugInfo
             )
-            
-            // DEBUG INFO AT BOTTOM - COLLAPSIBLE
-            DebugInfoSection(
-                showDebugInfo: $showDebugInfo,
-                debugInfo: debugInfo,
-                onUpdateDebugInfo: onUpdateDebugInfo
-            )
-            
-            // DELETE ALL DATA - AT BOTTOM
-            DeleteDataSection(showingClearAlert: $showingClearAlert)
+
+            Divider().padding(.vertical, 5)
+
+            // BETA TOGGLE
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Beta")
+                    .font(.headline)
+                    .padding(.horizontal)
+
+                Toggle("Beta Mode", isOn: Binding(
+                    get: { dataManager.betaMode },
+                    set: { dataManager.betaMode = $0 }
+                ))
+                .padding(.horizontal)
+            }
+
+            // DEBUG & DELETE - Only visible in beta mode
+            if dataManager.betaMode {
+                DebugInfoSection(
+                    showDebugInfo: $showDebugInfo,
+                    debugInfo: debugInfo,
+                    onUpdateDebugInfo: onUpdateDebugInfo
+                )
+
+                DeleteDataSection(showingClearAlert: $showingClearAlert)
+            }
         }
         .padding(.vertical)
     }
@@ -301,7 +308,6 @@ struct SettingsView: View {
                 onClearAllData: clearAllData,
                 onToggleGPS: { dataManager.useGPS = $0 },
                 onToggleHealthKit: { dataManager.useHealthKit = $0 },
-                onToggleWeather: { dataManager.trackWeather = $0 },
                 onToggleAltitude: { dataManager.trackAltitude = $0 },
                 onToggleTapTime: { dataManager.saveTapTime = $0 },
                 onToggleGPSTime: { dataManager.saveGPSTime = $0 }

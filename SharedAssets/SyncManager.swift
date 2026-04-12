@@ -38,7 +38,7 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         }
         
         let dataManager = DataManager.shared
-        let settings: [String: Any] = [
+        var settings: [String: Any] = [
             "startMode": dataManager.startMode.rawValue,
             "countdownTime": dataManager.countdownTime,
             "useGPS": dataManager.useGPS,
@@ -46,8 +46,12 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
             "trackWeather": dataManager.trackWeather,
             "trackAltitude": dataManager.trackAltitude,
             "saveTapTime": dataManager.saveTapTime,
-            "saveGPSTime": dataManager.saveGPSTime
+            "saveGPSTime": dataManager.saveGPSTime,
+            "betaMode": dataManager.betaMode
         ]
+        if let customData = try? JSONEncoder().encode(dataManager.customRunTypes) {
+            settings["customRunTypes"] = customData
+        }
         
         let message: [String: Any] = [
             "type": SyncMessageType.settingsChanged.rawValue,
@@ -236,7 +240,20 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
             dataManager.saveGPSTime = saveGPSTime
             hasChanges = true
         }
-        
+
+        if let betaMode = settings["betaMode"] as? Bool,
+           dataManager.betaMode != betaMode {
+            dataManager.betaMode = betaMode
+            hasChanges = true
+        }
+
+        if let customData = settings["customRunTypes"] as? Data,
+           let customTypes = try? JSONDecoder().decode([CustomRunType].self, from: customData),
+           dataManager.customRunTypes != customTypes {
+            dataManager.customRunTypes = customTypes
+            hasChanges = true
+        }
+
         // Only force UI update if we actually changed something
         if hasChanges {
             print("✅ SyncManager: Settings updated with changes")
@@ -292,19 +309,64 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
                 if let endHeartRate = runData["endHeartRate"] as? Double {
                     run.endHeartRate = endHeartRate
                 }
+                if let averageHeartRate = runData["averageHeartRate"] as? Double {
+                    run.averageHeartRate = averageHeartRate
+                }
+                if let maxHeartRate = runData["maxHeartRate"] as? Double {
+                    run.maxHeartRate = maxHeartRate
+                }
                 if let steps = runData["steps"] as? Int {
                     run.steps = steps
                 }
                 if let strideLength = runData["strideLength"] as? Double {
                     run.strideLength = strideLength
                 }
+                if let actualDistance = runData["actualDistance"] as? Double {
+                    run.actualDistance = actualDistance
+                }
+                if let averageSpeed = runData["averageSpeed"] as? Double {
+                    run.averageSpeed = averageSpeed
+                }
+                if let altitudeGain = runData["altitudeGain"] as? Double {
+                    run.altitudeGain = altitudeGain
+                }
+                if let locationName = runData["locationName"] as? String {
+                    run.locationName = locationName
+                }
                 if let temperature = runData["temperature"] as? Double {
                     run.temperature = temperature
+                }
+                if let feelsLike = runData["feelsLike"] as? Double {
+                    run.feelsLike = feelsLike
                 }
                 if let humidity = runData["humidity"] as? Double {
                     run.humidity = humidity
                 }
-                
+                if let pressure = runData["pressure"] as? Double {
+                    run.pressure = pressure
+                }
+                if let windSpeed = runData["windSpeed"] as? Double {
+                    run.windSpeed = windSpeed
+                }
+                if let windDirection = runData["windDirection"] as? Double {
+                    run.windDirection = windDirection
+                }
+                if let visibility = runData["visibility"] as? Double {
+                    run.visibility = visibility
+                }
+                if let uvIndex = runData["uvIndex"] as? Int {
+                    run.uvIndex = uvIndex
+                }
+                if let dewPoint = runData["dewPoint"] as? Double {
+                    run.dewPoint = dewPoint
+                }
+                if let aqi = runData["aqi"] as? Int {
+                    run.aqi = aqi
+                }
+                if let weatherCondition = runData["weatherCondition"] as? String {
+                    run.weatherCondition = weatherCondition
+                }
+
                 // Save without triggering another sync
                 context.insert(run)
                 try context.save()
@@ -350,7 +412,7 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         let dataManager = DataManager.shared
         
         // Add settings
-        syncData["settings"] = [
+        var settingsDict: [String: Any] = [
             "startMode": dataManager.startMode.rawValue,
             "countdownTime": dataManager.countdownTime,
             "useGPS": dataManager.useGPS,
@@ -358,8 +420,13 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
             "trackWeather": dataManager.trackWeather,
             "trackAltitude": dataManager.trackAltitude,
             "saveTapTime": dataManager.saveTapTime,
-            "saveGPSTime": dataManager.saveGPSTime
+            "saveGPSTime": dataManager.saveGPSTime,
+            "betaMode": dataManager.betaMode
         ]
+        if let customData = try? JSONEncoder().encode(dataManager.customRunTypes) {
+            settingsDict["customRunTypes"] = customData
+        }
+        syncData["settings"] = settingsDict
         
         // Add runs
         let context = dataManager.modelContainer.mainContext
@@ -382,15 +449,30 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
                 if let altitude = run.altitude { data["altitude"] = altitude }
                 if let startHeartRate = run.startHeartRate { data["startHeartRate"] = startHeartRate }
                 if let endHeartRate = run.endHeartRate { data["endHeartRate"] = endHeartRate }
+                if let averageHeartRate = run.averageHeartRate { data["averageHeartRate"] = averageHeartRate }
+                if let maxHeartRate = run.maxHeartRate { data["maxHeartRate"] = maxHeartRate }
                 if let steps = run.steps { data["steps"] = steps }
                 if let strideLength = run.strideLength { data["strideLength"] = strideLength }
+                if let actualDistance = run.actualDistance { data["actualDistance"] = actualDistance }
+                if let averageSpeed = run.averageSpeed { data["averageSpeed"] = averageSpeed }
+                if let altitudeGain = run.altitudeGain { data["altitudeGain"] = altitudeGain }
+                if let locationName = run.locationName { data["locationName"] = locationName }
                 if let temperature = run.temperature { data["temperature"] = temperature }
+                if let feelsLike = run.feelsLike { data["feelsLike"] = feelsLike }
                 if let humidity = run.humidity { data["humidity"] = humidity }
-                
+                if let pressure = run.pressure { data["pressure"] = pressure }
+                if let windSpeed = run.windSpeed { data["windSpeed"] = windSpeed }
+                if let windDirection = run.windDirection { data["windDirection"] = windDirection }
+                if let visibility = run.visibility { data["visibility"] = visibility }
+                if let uvIndex = run.uvIndex { data["uvIndex"] = uvIndex }
+                if let dewPoint = run.dewPoint { data["dewPoint"] = dewPoint }
+                if let aqi = run.aqi { data["aqi"] = aqi }
+                if let weatherCondition = run.weatherCondition { data["weatherCondition"] = weatherCondition }
+
                 return data
             }
             syncData["runs"] = runDataArray
-            
+
             print("✅ SyncManager: Gathered \(runs.count) runs for sync")
         } catch {
             print("❌ SyncManager: Failed to gather runs: \(error)")
@@ -478,11 +560,26 @@ extension SyncManager {
         if let altitude = run.altitude { data["altitude"] = altitude }
         if let startHeartRate = run.startHeartRate { data["startHeartRate"] = startHeartRate }
         if let endHeartRate = run.endHeartRate { data["endHeartRate"] = endHeartRate }
+        if let averageHeartRate = run.averageHeartRate { data["averageHeartRate"] = averageHeartRate }
+        if let maxHeartRate = run.maxHeartRate { data["maxHeartRate"] = maxHeartRate }
         if let steps = run.steps { data["steps"] = steps }
         if let strideLength = run.strideLength { data["strideLength"] = strideLength }
+        if let actualDistance = run.actualDistance { data["actualDistance"] = actualDistance }
+        if let averageSpeed = run.averageSpeed { data["averageSpeed"] = averageSpeed }
+        if let altitudeGain = run.altitudeGain { data["altitudeGain"] = altitudeGain }
+        if let locationName = run.locationName { data["locationName"] = locationName }
         if let temperature = run.temperature { data["temperature"] = temperature }
+        if let feelsLike = run.feelsLike { data["feelsLike"] = feelsLike }
         if let humidity = run.humidity { data["humidity"] = humidity }
-        
+        if let pressure = run.pressure { data["pressure"] = pressure }
+        if let windSpeed = run.windSpeed { data["windSpeed"] = windSpeed }
+        if let windDirection = run.windDirection { data["windDirection"] = windDirection }
+        if let visibility = run.visibility { data["visibility"] = visibility }
+        if let uvIndex = run.uvIndex { data["uvIndex"] = uvIndex }
+        if let dewPoint = run.dewPoint { data["dewPoint"] = dewPoint }
+        if let aqi = run.aqi { data["aqi"] = aqi }
+        if let weatherCondition = run.weatherCondition { data["weatherCondition"] = weatherCondition }
+
         return data
     }
 }
