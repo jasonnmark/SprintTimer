@@ -8,12 +8,12 @@ enum TimerViewMode {
     case waitingForMotion
     case countdown
     case actionMenu
+    case outlierAlert
 }
 
 struct TimerView: View {
     @ObservedObject var viewModel: SprintTimerViewModel
     @Binding var isPresented: Bool
-    @State private var showingOutlierAlert = false
     @State private var outlierReason = ""
     @State private var tapHandled = false
     @State private var isInLongPressMode = false
@@ -47,10 +47,10 @@ struct TimerView: View {
             // Content based on mode
             switch viewMode {
             case .actionMenu:
-                // Action menu as part of the view hierarchy, not a presentation
                 actionMenuContent()
+            case .outlierAlert:
+                outlierAlertContent()
             default:
-                // Normal timer content
                 timerContent()
             }
         }
@@ -59,26 +59,6 @@ struct TimerView: View {
         .onDisappear {
             menuWorkItem?.cancel()
             menuWorkItem = nil
-        }
-        .alert("Unusual Run Time", isPresented: $showingOutlierAlert) {
-            Button("Save Anyway") {
-                viewModel.saveRunData(modelContext: modelContext)
-                viewModel.resetTimer()
-                viewMode = .start
-                savedElapsedTime = 0
-                isInLongPressMode = false
-                tapHandled = false
-            }
-            Button("Delete Run", role: .destructive) {
-                // Delete the run and reset
-                viewModel.resetTimer()
-                viewMode = .start
-                savedElapsedTime = 0
-                isInLongPressMode = false
-                tapHandled = false
-            }
-        } message: {
-            Text(outlierReason)
         }
     }
     
@@ -205,6 +185,57 @@ struct TimerView: View {
         .padding(.top, 32)
     }
     
+    @ViewBuilder
+    private func outlierAlertContent() -> some View {
+        VStack(spacing: 10) {
+            Text("Unusual\nTime")
+                .font(.system(size: 37, weight: .bold))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .padding(.top, 16)
+
+            Button(action: {
+                viewModel.saveRunData(modelContext: modelContext)
+                viewModel.resetTimer()
+                viewMode = .start
+                savedElapsedTime = 0
+                isInLongPressMode = false
+                tapHandled = false
+            }) {
+                Text("Save")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(Color.green.opacity(0.75))
+                    .cornerRadius(10)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 4)
+
+            Button(action: {
+                viewModel.resetTimer()
+                viewMode = .start
+                savedElapsedTime = 0
+                isInLongPressMode = false
+                tapHandled = false
+            }) {
+                Text("Delete")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(Color.red.opacity(0.35))
+                    .cornerRadius(10)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 4)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 16)
+    }
+
     private func saveRun() {
         viewModel.saveCurrentRun(modelContext: modelContext)
         viewModel.resetTimer()
@@ -240,7 +271,7 @@ struct TimerView: View {
     private func combinedGesture() -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { _ in
-                guard viewMode != .actionMenu else { return }
+                guard viewMode != .actionMenu && viewMode != .outlierAlert else { return }
                 if !tapHandled {
                     tapHandled = true
                     isInLongPressMode = true
@@ -275,9 +306,8 @@ struct TimerView: View {
                         savedElapsedTime = viewModel.elapsedTime
                         
                         if result.isOutlier {
-                            // Show outlier alert instead of action menu
                             outlierReason = result.reason
-                            showingOutlierAlert = true
+                            viewMode = .outlierAlert
                         } else {
                             // Normal flow - show action menu
                             viewMode = .actionMenu
@@ -303,7 +333,7 @@ struct TimerView: View {
     
     private func backgroundColor() -> Color {
         switch viewMode {
-        case .actionMenu:
+        case .actionMenu, .outlierAlert:
             return Color.black.opacity(0.9)
         default:
             if currentMode == .start || timerStartedButHidden {
