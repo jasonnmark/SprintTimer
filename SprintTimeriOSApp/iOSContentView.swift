@@ -81,20 +81,36 @@ struct SimpleHomeView: View {
                             .padding(.horizontal)
                         
                         List(runs.prefix(5)) { run in
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text("\(run.distance)m")
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text("\(run.distance)m")
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                        Text(run.formattedTime)
+                                            .font(.headline)
+                                    }
+
+                                    Spacer()
+
+                                    Text(formatRunDate(run.date))
                                         .font(.caption)
                                         .foregroundColor(.gray)
-                                    Text(run.formattedTime)
-                                        .font(.headline)
                                 }
-                                
-                                Spacer()
-                                
-                                Text(formatRunDate(run.date))
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
+
+                                if !run.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    HStack(alignment: .top, spacing: 6) {
+                                        Image(systemName: "note.text")
+                                            .font(.caption)
+                                            .foregroundColor(.blue)
+                                            .padding(.top, 1)
+
+                                        Text(run.notes)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .lineLimit(2)
+                                    }
+                                }
                             }
                         }
                         .listStyle(PlainListStyle())
@@ -112,13 +128,6 @@ struct SimpleHomeView: View {
                 Spacer()
             }
             .navigationBarHidden(true)
-            .onAppear {
-                print("DEBUG: iPhone app runs count: \(runs.count)")
-                if let groupURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.JasonMark.SprintTimer") {
-                    let dbURL = groupURL.appendingPathComponent("SprintTimer.sqlite")
-                    print("DEBUG: Database exists: \(FileManager.default.fileExists(atPath: dbURL.path))")
-                }
-            }
         }
     }
     
@@ -140,8 +149,7 @@ struct SimpleHomeView: View {
     
     private func formatRunDate(_ date: Date) -> String {
         let calendar = Calendar.current
-        let now = Date()
-        
+
         if calendar.isDateInToday(date) {
             // Today: "today 2:34 PM"
             let formatter = DateFormatter()

@@ -9,18 +9,17 @@ struct DayNotesView: View {
     @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 8) {
                 Text("Day Notes")
                     .font(.system(size: 14, weight: .bold))
                 
 #if os(watchOS)
                 TextField("Add day notes...", text: $noteText, axis: .vertical)
-                    .font(.system(size: 12))
+                    .font(.system(size: 16))
                     .focused($isTextFieldFocused)
-                    .focusable()
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 6)
                     .background(Color.gray.opacity(0.2))
                     .cornerRadius(8)
                     .padding(.horizontal)
@@ -51,16 +50,16 @@ struct DayNotesView: View {
                         dismiss()
                     }) {
                         Text("Cancel")
-                            .font(.system(size: 12))
+                            .font(.system(size: 16))
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
-                    
+
                     Button(action: {
                         saveDayNotes()
                     }) {
                         Text("Save")
-                            .font(.system(size: 12))
+                            .font(.system(size: 16))
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)

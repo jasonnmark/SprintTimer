@@ -55,21 +55,21 @@ struct TimerView: View {
             }
         }
         .contentShape(Rectangle())
-        .gesture(viewMode == .actionMenu ? nil : combinedGesture())
+        .gesture(combinedGesture())
         .onDisappear {
             menuWorkItem?.cancel()
             menuWorkItem = nil
         }
         .alert("Unusual Run Time", isPresented: $showingOutlierAlert) {
             Button("Save Anyway") {
-                // Save the run despite being an outlier, then offer notes
                 viewModel.saveRunData(modelContext: modelContext)
+                viewModel.resetTimer()
                 viewMode = .start
                 savedElapsedTime = 0
                 isInLongPressMode = false
                 tapHandled = false
                 DispatchQueue.main.async {
-                    NotificationCenter.default.post(name: Notification.Name("ShowPostRunNotes"), object: nil)
+                    NotificationCenter.default.post(name: Notification.Name("DismissRunnerView"), object: nil)
                 }
             }
             Button("Delete Run", role: .destructive) {
@@ -148,8 +148,8 @@ struct TimerView: View {
     
     @ViewBuilder
     private func actionMenuContent() -> some View {
-        VStack(spacing: 10) {
-            Spacer(minLength: 48)
+        VStack(spacing: 14) {
+            Spacer(minLength: 40)
 
             // Save Run button
             Button(action: {
@@ -157,43 +157,42 @@ struct TimerView: View {
             }) {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 21))
-                        .padding(.leading, 8)
+                        .font(.system(size: 24))
+                        .padding(.leading, 10)
                     Text("Save Run")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 20, weight: .semibold))
                     Spacer(minLength: 0)
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 8)
-                .padding(.trailing, 8)
+                .padding(.vertical, 12)
+                .padding(.trailing, 10)
                 .background(Color.green.opacity(0.75))
-                .cornerRadius(10)
+                .cornerRadius(12)
             }
             .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, 8)
 
             // Save with Run Notes button
             Button(action: {
-                print("DEBUG: Save with Notes button tapped")
                 saveWithNotes()
             }) {
                 HStack(spacing: 8) {
                     Image(systemName: "note.text.badge.plus")
-                        .font(.system(size: 21))
-                        .padding(.leading, 8)
+                        .font(.system(size: 24))
+                        .padding(.leading, 10)
                     Text("Save w/Notes")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 20, weight: .semibold))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.9)
+                        .minimumScaleFactor(0.85)
                     Spacer(minLength: 0)
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 8)
-                .padding(.trailing, 8)
+                .padding(.vertical, 12)
+                .padding(.trailing, 10)
                 .background(Color.blue.opacity(0.75))
-                .cornerRadius(10)
+                .cornerRadius(12)
             }
             .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, 8)
@@ -204,18 +203,18 @@ struct TimerView: View {
             }) {
                 HStack(spacing: 8) {
                     Image(systemName: "trash.fill")
-                        .font(.system(size: 21))
-                        .padding(.leading, 8)
+                        .font(.system(size: 24))
+                        .padding(.leading, 10)
                     Text("Delete")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 20, weight: .semibold))
                     Spacer(minLength: 0)
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 8)
-                .padding(.trailing, 8)
+                .padding(.vertical, 12)
+                .padding(.trailing, 10)
                 .background(Color.red.opacity(0.75))
-                .cornerRadius(10)
+                .cornerRadius(12)
             }
             .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, 8)
@@ -226,13 +225,14 @@ struct TimerView: View {
     
     private func saveRun() {
         viewModel.saveCurrentRun(modelContext: modelContext)
-        // Show post-run notes prompt instead of immediately resetting
+        viewModel.resetTimer()
         viewMode = .start
         savedElapsedTime = 0
         isInLongPressMode = false
         tapHandled = false
+        // Return to home screen after saving
         DispatchQueue.main.async {
-            NotificationCenter.default.post(name: Notification.Name("ShowPostRunNotes"), object: nil)
+            NotificationCenter.default.post(name: Notification.Name("DismissRunnerView"), object: nil)
         }
     }
     
@@ -247,8 +247,6 @@ struct TimerView: View {
     
     // CHANGED: no QuickBoard here; we ask RunnerView to open the Notes sheet
     private func saveWithNotes() {
-        print("DEBUG: saveWithNotes called")
-        
         // 1) Hide the in-view action menu immediately
         viewMode = .start
         isInLongPressMode = false
@@ -264,6 +262,7 @@ struct TimerView: View {
     private func combinedGesture() -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { _ in
+                guard viewMode != .actionMenu else { return }
                 if !tapHandled {
                     tapHandled = true
                     isInLongPressMode = true

@@ -10,17 +10,17 @@ struct NotesView: View {
     @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 8) {
                 Text("Run Notes")
                     .font(.system(size: 14, weight: .bold))
                 
 #if os(watchOS)
                 TextField("Add run notes...", text: $noteText, axis: .vertical)
-                    .font(.system(size: 12))
+                    .font(.system(size: 16))
                     .focused($isTextFieldFocused)
-                    .focusable()
                     .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
 #else
                 TextEditor(text: $noteText)
                     .font(.body)

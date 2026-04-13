@@ -16,33 +16,23 @@ struct HistoryView: View {
     @State private var editingRun: Run?
     @StateObject private var notesViewModel = SprintTimerViewModel()
     @State private var selectedDistance: Int = 0 // 0 = All runs
-    
-    // Group runs by day
-    var runsByDay: [Date: [Run]] {
-        Dictionary(grouping: filteredRuns) { run in
+
+    // Cached groupings to avoid recomputation on every scroll
+    @State private var cachedRunsByDay: [Date: [Run]] = [:]
+    @State private var cachedSortedDays: [Date] = []
+    @State private var cachedAvailableDistances: [Int] = []
+
+    private func recomputeGroupings() {
+        let filtered = selectedDistance == 0 ? runs : runs.filter { $0.distance == selectedDistance }
+        cachedRunsByDay = Dictionary(grouping: filtered) { run in
             Calendar.current.startOfDay(for: run.date)
         }
-    }
-    
-    // Get sorted days
-    var sortedDays: [Date] {
-        runsByDay.keys.sorted(by: >)
-    }
-    
-    // Unique distances available for filtering
-    var availableDistances: [Int] {
-        let distances = Set(runs.map { $0.distance }).sorted()
-        return distances
-    }
-
-    // Filtered runs based on selected distance
-    var filteredRuns: [Run] {
-        if selectedDistance == 0 { return runs }
-        return runs.filter { $0.distance == selectedDistance }
+        cachedSortedDays = cachedRunsByDay.keys.sorted(by: >)
+        cachedAvailableDistances = Set(runs.map { $0.distance }).sorted()
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             if selectedDate == nil {
                 // Day Selection View
                 VStack {
@@ -58,7 +48,7 @@ struct HistoryView: View {
 
                         Picker("Distance", selection: $selectedDistance) {
                             Text("All").tag(0)
-                            ForEach(availableDistances, id: \.self) { distance in
+                            ForEach(cachedAvailableDistances, id: \.self) { distance in
                                 Text("\(distance)m").tag(distance)
                             }
                         }
@@ -68,7 +58,7 @@ struct HistoryView: View {
                     .padding(.horizontal)
                     .padding(.bottom, 6)
                     
-                    if sortedDays.isEmpty {
+                    if cachedSortedDays.isEmpty {
                         Spacer()
                         VStack(spacing: 5) {
                             Image(systemName: "figure.run")
@@ -84,11 +74,11 @@ struct HistoryView: View {
                         }
                         Spacer()
                     } else {
-                        List(sortedDays, id: \.self) { day in
+                        List(cachedSortedDays, id: \.self) { day in
                             Button(action: {
                                 selectedDate = day
                             }) {
-                                DayRow(date: day, runs: runsByDay[day] ?? [])
+                                DayRow(date: day, runs: cachedRunsByDay[day] ?? [])
                                     .frame(maxWidth: .infinity, alignment: .leading) // Make button fill entire row width
                                     .contentShape(Rectangle()) // Make entire area tappable
                             }
@@ -97,14 +87,14 @@ struct HistoryView: View {
                         .listStyle(CarouselListStyle())
                     }
                 }
-                .onAppear {
-                    print("Watch History: \(runs.count) runs loaded")
-                }
+                .onAppear { recomputeGroupings() }
+                .onChange(of: runs.count) { recomputeGroupings() }
+                .onChange(of: selectedDistance) { recomputeGroupings() }
             } else {
                 // Day Detail View
                 DayDetailView(
                     date: selectedDate!,
-                    runs: runsByDay[selectedDate!] ?? [],
+                    runs: cachedRunsByDay[selectedDate!] ?? [],
                     onBack: { selectedDate = nil },
                     showingDayNotes: $showingDayNotes,
                     showingRunNotes: $showingRunNotes,
@@ -407,7 +397,7 @@ struct DayDetailView: View {
             for index in offsets {
                 DataManager.shared.modelContainer.mainContext.delete(runs[index])
             }
-            try? DataManager.shared.modelContainer.mainContext.save()
+            try? DataManager.shared.modelContainer.mainContext.save() // Best-effort after delete
         }
     }
 }

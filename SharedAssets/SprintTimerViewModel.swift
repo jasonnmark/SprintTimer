@@ -4,9 +4,13 @@ import CoreLocation
 import HealthKit
 import SwiftData
 import Combine
+@preconcurrency import AVFoundation
+import os
 #if os(watchOS)
 import WatchKit
 #endif
+
+private let logger = Logger(subsystem: "com.JasonMark.SprintTimer", category: "ViewModel")
 
 @MainActor
 class SprintTimerViewModel: NSObject, ObservableObject {
@@ -17,20 +21,20 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     @Published var isInCountdown = false
     @Published var countdownValue = 0
     @Published var isPaused = false
-    
+
     private var pausedTime: TimeInterval = 0
     private var countdownTimer: Timer?
-    
+
     // Data Manager
     private let dataManager = DataManager.shared
-    
+
     // Run Data
     @Published var selectedDistance = 100
     @Published var dailyNotes = ""
     @Published var currentRunNotes = ""
     @Published var currentEditingRun: Run? // For editing existing run notes from history
     @Published var currentEditingDate: Date? // For editing day notes for specific date from history
-    
+
     // Current Run Data
     @Published var currentLocation: CLLocation?
     @Published var startHeartRate: Double?
@@ -42,38 +46,33 @@ class SprintTimerViewModel: NSObject, ObservableObject {
 
     // GPS route tracking for distance/speed/altitude gain
     private var routeLocations: [CLLocation] = []
-    
+
     private var timer: Timer?
     private var startTime: Date?
-    private let motionManager = CMMotionManager()
+    private lazy var motionManager = CMMotionManager()
     private let locationManager = CLLocationManager()
     private let healthStore = HKHealthStore()
-    
+
     var formattedTime: String {
         let minutes = Int(elapsedTime) / 60
         let seconds = Int(elapsedTime) % 60
         let milliseconds = Int((elapsedTime.truncatingRemainder(dividingBy: 1)) * 1000)
-        
+
         if minutes > 0 {
             return String(format: "%d:%02d.%03d", minutes, seconds, milliseconds)
         } else {
             return String(format: "%d.%03d", seconds, milliseconds)
         }
     }
-    
+
     override init() {
         super.init()
-        setupMotionDetection()
+        setupAudioSession()
         requestPermissions()
         setupLocationManager()
     }
-    
+
     func startRun() {
-        // Debug logging
-        print("=== Starting Run ===")
-        print("Start Mode: \(dataManager.startMode.rawValue)")
-        print("==================")
-        
         switch dataManager.startMode {
         case .countdown:
             startCountdown()
@@ -84,92 +83,188 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             beginTiming()
         }
     }
-    
+
     private func startCountdown() {
         isInCountdown = true
         countdownValue = dataManager.countdownTime
-        
-        // Play initial beep
-        playCountdownSound(isGo: false)
-        
-        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            
+
+        // Pre-warm the audio engine so the first tone doesn't block
+        prepareToneEngine()
+
+        // Use a Date-anchored countdown so audio latency can't drift the schedule
+        let countdownStart = Date()
+        let totalTicks = dataManager.countdownTime
+
+        countdownTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] timer in
+            guard let self = self else { timer.invalidate(); return }
+
             Task { @MainActor in
-                self.countdownValue -= 1
-                
-                if self.countdownValue == 3 {
-                    // "On your mark" beep
-                    self.playCountdownSound(isGo: false)
-                } else if self.countdownValue == 2 {
-                    // "Get set" beep
-                    self.playCountdownSound(isGo: false)
-                } else if self.countdownValue == 0 {
-                    // "Go" beep with vibration
-                    self.playCountdownSound(isGo: true)
-                    self.countdownTimer?.invalidate()
+                let elapsed = Date().timeIntervalSince(countdownStart)
+                let ticksElapsed = Int(elapsed)  // whole seconds elapsed
+                let newValue = totalTicks - ticksElapsed
+
+                guard newValue >= 0 else { return }
+                guard newValue != self.countdownValue else { return }
+
+                self.countdownValue = newValue
+
+                if newValue >= 1 && newValue <= 3 {
+                    self.playCountdownCue(isGo: false)
+                } else if newValue == 0 {
+                    self.playGoBurst()
+                    timer.invalidate()
                     self.isInCountdown = false
                     self.beginTiming()
                 }
             }
         }
     }
-    
-    private func playCountdownSound(isGo: Bool) {
+
+    // MARK: - Tone Generator (Pole Position–style race start)
+
+    /// Holds a strong reference to the current AVAudioPlayer so ARC doesn't deallocate mid-playback.
+    private var tonePlayer: AVAudioPlayer?
+
+    /// Pre-generated WAV data for countdown tones, built once at countdown start.
+    private var countdownToneData: Data?
+    private var goToneData: Data?
+
+    /// Pre-generate tone WAV data so playback is instant during the countdown.
+    private func prepareToneEngine() {
+        countdownToneData = generateWAVData(frequency: 880, duration: 0.2, volume: 0.7)
+        goToneData = generateWAVData(frequency: 1760, duration: 0.5, volume: 1.0)
+
+        // Prime AVAudioPlayer by playing a silent tone — warms up the audio session
+        if let silenceData = generateWAVData(frequency: 0, duration: 0.01, volume: 0) {
+            tonePlayer = try? AVAudioPlayer(data: silenceData)
+            tonePlayer?.volume = 0
+            tonePlayer?.play()
+        }
+    }
+
+    private func tearDownToneEngine() {
+        tonePlayer?.stop()
+        tonePlayer = nil
+        countdownToneData = nil
+        goToneData = nil
+    }
+
+    /// Play a countdown tick: 880 Hz, 200ms
+    private func playCountdownCue(isGo: Bool) {
+        if let data = countdownToneData {
+            playWAVData(data, volume: 0.7)
+        }
+
         #if os(watchOS)
-        if isGo {
-            WKInterfaceDevice.current().play(.start)
-        } else {
-            WKInterfaceDevice.current().play(.click)
+        WKInterfaceDevice.current().play(.click)
+        #else
+        let feedback = UISelectionFeedbackGenerator()
+        feedback.selectionChanged()
+        #endif
+    }
+
+    /// Play the GO signal: 1760 Hz (octave up), 500ms, full volume + haptic burst
+    private func playGoBurst() {
+        if let data = goToneData {
+            playWAVData(data, volume: 1.0)
+        }
+
+        #if os(watchOS)
+        for i in 0..<4 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.12) {
+                WKInterfaceDevice.current().play(.start)
+            }
         }
         #else
-        // iOS haptic feedback
-        if isGo {
-            let impactFeedback = UIImpactFeedbackGenerator(style: .heavy)
-            impactFeedback.impactOccurred()
-        } else {
-            let selectionFeedback = UISelectionFeedbackGenerator()
-            selectionFeedback.selectionChanged()
+        for i in 0..<4 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.12) {
+                let impact = UIImpactFeedbackGenerator(style: .heavy)
+                impact.impactOccurred()
+            }
         }
         #endif
     }
-    
+
+    /// Play in-memory WAV data via AVAudioPlayer (works reliably on watchOS).
+    private func playWAVData(_ data: Data, volume: Float) {
+        do {
+            let player = try AVAudioPlayer(data: data)
+            player.volume = volume
+            player.play()
+            tonePlayer = player // keep strong reference
+        } catch {
+            logger.error("Failed to play tone: \(error)")
+        }
+    }
+
+    /// Build a 16-bit mono WAV file in memory containing a sine wave.
+    private func generateWAVData(frequency: Double, duration: Double, volume: Float) -> Data? {
+        let sampleRate: Int = 44100
+        let numSamples = Int(Double(sampleRate) * duration)
+        let bitsPerSample: Int = 16
+        let byteRate = sampleRate * (bitsPerSample / 8)
+        let dataSize = numSamples * (bitsPerSample / 8)
+        let fileSize = 36 + dataSize
+
+        var data = Data()
+        // RIFF header
+        data.append(contentsOf: [UInt8]("RIFF".utf8))
+        data.append(contentsOf: withUnsafeBytes(of: UInt32(fileSize).littleEndian) { Array($0) })
+        data.append(contentsOf: [UInt8]("WAVE".utf8))
+        // fmt chunk
+        data.append(contentsOf: [UInt8]("fmt ".utf8))
+        data.append(contentsOf: withUnsafeBytes(of: UInt32(16).littleEndian) { Array($0) })
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(1).littleEndian) { Array($0) }) // PCM
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(1).littleEndian) { Array($0) }) // mono
+        data.append(contentsOf: withUnsafeBytes(of: UInt32(sampleRate).littleEndian) { Array($0) })
+        data.append(contentsOf: withUnsafeBytes(of: UInt32(byteRate).littleEndian) { Array($0) })
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(bitsPerSample / 8).littleEndian) { Array($0) }) // block align
+        data.append(contentsOf: withUnsafeBytes(of: UInt16(bitsPerSample).littleEndian) { Array($0) })
+        // data chunk
+        data.append(contentsOf: [UInt8]("data".utf8))
+        data.append(contentsOf: withUnsafeBytes(of: UInt32(dataSize).littleEndian) { Array($0) })
+
+        let fadeFrames = min(Int(Double(sampleRate) * 0.02), numSamples)
+        for i in 0..<numSamples {
+            var sample = sin(2.0 * .pi * frequency * Double(i) / Double(sampleRate))
+            let remaining = numSamples - i
+            if remaining < fadeFrames {
+                sample *= Double(remaining) / Double(fadeFrames)
+            }
+            let clamped = max(-1.0, min(1.0, sample * Double(volume)))
+            let int16 = Int16(clamped * Double(Int16.max))
+            data.append(contentsOf: withUnsafeBytes(of: int16.littleEndian) { Array($0) })
+        }
+
+        return data
+    }
+
     func stopRun(modelContext: ModelContext) -> (isOutlier: Bool, reason: String) {
-        print("DEBUG: Stopping run - elapsed time: \(elapsedTime)")
         guard elapsedTime > 0 else {
-            print("❌ No elapsed time recorded, not saving")
             return (false, "")
         }
-        
+
         isRunning = false
         timer?.invalidate()
         timer = nil
-        
+
         // Check if it's an outlier before saving
         let outlierCheck = isRunOutlier(modelContext: modelContext)
-        
-        if !outlierCheck.isOutlier {
-            // Not an outlier, but don't save yet - let the UI handle saving
-            // This prevents double-saving
-        }
-        
+
         // Fetch HealthKit metrics at stop
         if dataManager.useHealthKit, let start = startTime {
             let end = Date()
-            // Capture ending heart rate (latest sample)
             fetchLatestHeartRate { [weak self] hr in
                 Task { @MainActor in
                     self?.endHeartRate = hr
                 }
             }
-            // Capture average and max heart rate during the run
             fetchHeartRateStats(from: start, to: end) { [weak self] avg, max in
                 Task { @MainActor in
                     self?.averageHeartRate = avg
                     self?.maxHeartRate = max
                 }
             }
-            // Capture steps over the interval and compute stride length
             fetchSteps(from: start, to: end) { [weak self] count in
                 Task { @MainActor in
                     self?.steps = count
@@ -181,32 +276,30 @@ class SprintTimerViewModel: NSObject, ObservableObject {
                 }
             }
         }
-        
+
         return outlierCheck
     }
-    
+
     func saveCurrentRun(modelContext: ModelContext) {
         saveRunData(modelContext: modelContext)
     }
-    
+
     func endRun(modelContext: ModelContext) {
         _ = stopRun(modelContext: modelContext)
         resetTimer()
     }
-    
+
     func saveWithNotes(modelContext: ModelContext, completion: @escaping () -> Void = {}) {
         #if os(watchOS)
-        // IMPORTANT: Don’t present QuickBoard here (we may still be inside a confirmationDialog).
-        // Ask RunnerView to present it after the dialog disappears.
         NotificationCenter.default.post(name: Notification.Name("ShowRunNotes"), object: nil)
         #else
-        // iPhone flow (unchanged): use your existing route to show a notes UI.
         NotificationCenter.default.post(name: Notification.Name("ShowRunNotes"), object: nil)
         #endif
     }
-    
+
     func resetTimer() {
         elapsedTime = 0
+        hasSavedCurrentRun = false
         isRunning = false
         isWaitingForMotion = false
         isInCountdown = false
@@ -215,9 +308,10 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         countdownValue = 0
         timer?.invalidate()
         countdownTimer?.invalidate()
+        tearDownToneEngine()
         timer = nil
         countdownTimer = nil
-        currentRunNotes = "" // Clear run-specific notes
+        currentRunNotes = ""
         startHeartRate = nil
         endHeartRate = nil
         averageHeartRate = nil
@@ -225,11 +319,12 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         steps = nil
         strideLength = nil
         routeLocations = []
+        motionManager.stopAccelerometerUpdates()
         if dataManager.useGPS {
             locationManager.stopUpdatingLocation()
         }
     }
-    
+
     private func beginTiming() {
         startTime = Date()
         isRunning = true
@@ -237,7 +332,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         isInCountdown = false
         isPaused = false
         pausedTime = 0
-        
+
         if dataManager.useHealthKit {
             fetchLatestHeartRate { [weak self] hr in
                 Task { @MainActor in
@@ -245,12 +340,12 @@ class SprintTimerViewModel: NSObject, ObservableObject {
                 }
             }
         }
-        
+
         // Start location tracking if enabled
         if dataManager.useGPS {
             locationManager.startUpdatingLocation()
         }
-        
+
         timer = Timer.scheduledTimer(withTimeInterval: 0.001, repeats: true) { [weak self] _ in
             guard let self = self else { return }
             Task { @MainActor in
@@ -259,30 +354,37 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             }
         }
     }
-    
-    private func setupMotionDetection() {
-        motionManager.accelerometerUpdateInterval = 0.01
+
+    private func setupAudioSession() {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try session.setActive(true)
+        } catch {
+            logger.error("Failed to configure audio session: \(error)")
+        }
     }
-    
+
     private func setupLocationManager() {
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
         locationManager.distanceFilter = 1.0
     }
-    
+
     private func startMotionDetection() {
         guard motionManager.isAccelerometerAvailable else { return }
-        
+        motionManager.accelerometerUpdateInterval = 0.01
+
         motionManager.startAccelerometerUpdates(to: .main) { [weak self] data, error in
             guard let data = data else { return }
-            
+
             Task { @MainActor in
                 guard let self = self else { return }
-                
+
                 let acceleration = sqrt(pow(data.acceleration.x, 2) +
                                       pow(data.acceleration.y, 2) +
                                       pow(data.acceleration.z, 2))
-                
+
                 if acceleration > 2.5 && self.isWaitingForMotion {
                     self.motionManager.stopAccelerometerUpdates()
                     self.beginTiming()
@@ -290,39 +392,30 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             }
         }
     }
-    
+
     private func requestPermissions() {
-        // Location permissions
         locationManager.requestWhenInUseAuthorization()
-        
-        // HealthKit permissions - only if available and user has enabled it
+
         guard HKHealthStore.isHealthDataAvailable(), dataManager.useHealthKit else {
-            print("HealthKit not available or not enabled in settings")
             return
         }
-        
+
         let typesToRead: Set<HKObjectType> = [
             HKObjectType.quantityType(forIdentifier: .heartRate)!,
             HKObjectType.quantityType(forIdentifier: .stepCount)!
         ]
-        
+
         let typesToWrite: Set<HKSampleType> = [
             HKObjectType.workoutType()
         ]
-        
+
         healthStore.requestAuthorization(toShare: typesToWrite, read: typesToRead) { success, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    print("❌ HealthKit authorization error: \(error)")
-                } else if success {
-                    print("✅ HealthKit authorization granted")
-                } else {
-                    print("⚠️ HealthKit authorization denied")
-                }
+            if let error = error {
+                logger.error("HealthKit authorization error: \(error)")
             }
         }
     }
-    
+
     func pauseTimer() {
         if isRunning {
             isPaused = true
@@ -332,13 +425,13 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             timer = nil
         }
     }
-    
+
     func resumeTimer() {
         if isPaused {
             isPaused = false
             isRunning = true
             startTime = Date().addingTimeInterval(-pausedTime)
-            
+
             timer = Timer.scheduledTimer(withTimeInterval: 0.001, repeats: true) { [weak self] _ in
                 guard let self = self else { return }
                 Task { @MainActor in
@@ -348,10 +441,13 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             }
         }
     }
-    
+
+    private var hasSavedCurrentRun = false
+
     func saveRunData(modelContext: ModelContext) {
-        print("DEBUG: Starting save - Distance: \(selectedDistance), Time: \(elapsedTime)")
-        
+        guard elapsedTime > 0, !hasSavedCurrentRun else { return }
+        hasSavedCurrentRun = true
+
         // Combine daily notes and run notes
         var combinedNotes = ""
         if !dailyNotes.isEmpty && !currentRunNotes.isEmpty {
@@ -361,10 +457,10 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         } else {
             combinedNotes = currentRunNotes
         }
-        
+
         // Create new run
         let run = Run(distance: self.selectedDistance, elapsedTime: elapsedTime, notes: combinedNotes)
-        
+
         // Add location data if available
         if let location = currentLocation {
             run.latitude = location.coordinate.latitude
@@ -375,16 +471,11 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         // Calculate GPS distance, speed, and altitude gain from route
         if routeLocations.count >= 2 {
             var totalDistance: CLLocationDistance = 0
-            var minAltitude = routeLocations[0].altitude
-            var maxAltitude = routeLocations[0].altitude
             var altitudeGain: Double = 0
 
             for i in 1..<routeLocations.count {
                 totalDistance += routeLocations[i].distance(from: routeLocations[i - 1])
-                let alt = routeLocations[i].altitude
-                if alt > maxAltitude { maxAltitude = alt }
-                if alt < minAltitude { minAltitude = alt }
-                let altDiff = alt - routeLocations[i - 1].altitude
+                let altDiff = routeLocations[i].altitude - routeLocations[i - 1].altitude
                 if altDiff > 0 { altitudeGain += altDiff }
             }
 
@@ -394,7 +485,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             }
             run.altitudeGain = altitudeGain
         }
-        
+
         // Add health data if available
         run.startHeartRate = startHeartRate
         run.endHeartRate = endHeartRate
@@ -402,35 +493,32 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         run.maxHeartRate = maxHeartRate
         run.steps = steps
         run.strideLength = strideLength
-        
-        // Reverse geocode location name
+
+        // Use DataManager to save (before async work so the run is persisted)
+        dataManager.saveRun(run)
+
+        // Capture run ID for async work (avoids capturing non-Sendable Run across isolation boundaries)
+        let runId = run.id
+
+        // Reverse geocode location name asynchronously
         if let location = currentLocation {
-            let geocoder = CLGeocoder()
-            geocoder.reverseGeocodeLocation(location) { placemarks, error in
-                if let placemark = placemarks?.first {
-                    let parts = [placemark.locality, placemark.administrativeArea].compactMap { $0 }
-                    let name = parts.joined(separator: ", ")
-                    if !name.isEmpty {
-                        Task { @MainActor in
-                            run.locationName = name
-                            try? DataManager.shared.modelContainer.mainContext.save()
-                        }
-                    }
+            Task {
+                let name = await reverseGeocode(location: location)
+                if let name, !name.isEmpty {
+                    await updateRun(id: runId) { $0.locationName = name }
                 }
             }
         }
 
-        // Use DataManager to save
-        dataManager.saveRun(run)
-
-        // Fetch weather data asynchronously if enabled and location available
+        // Fetch weather data asynchronously if enabled and location available (iOS only)
+        #if os(iOS)
         if dataManager.trackWeather, let location = currentLocation {
             Task {
                 async let weatherResult = WeatherService.shared.fetchWeather(for: location)
                 async let aqiResult = WeatherService.shared.fetchAQI(for: location)
 
                 if let weather = await weatherResult {
-                    await MainActor.run {
+                    await updateRun(id: runId) { run in
                         run.temperature = weather.temperature
                         run.feelsLike = weather.feelsLike
                         run.humidity = weather.humidity
@@ -441,61 +529,91 @@ class SprintTimerViewModel: NSObject, ObservableObject {
                         run.uvIndex = weather.uvIndex
                         run.dewPoint = weather.dewPoint
                         run.weatherCondition = weather.weatherCondition
-                        try? DataManager.shared.modelContainer.mainContext.save()
                     }
                 }
                 if let aqi = await aqiResult {
-                    await MainActor.run {
-                        run.aqi = aqi.aqi
-                        try? DataManager.shared.modelContainer.mainContext.save()
-                    }
+                    await updateRun(id: runId) { $0.aqi = aqi.aqi }
                 }
             }
         }
+        #endif
 
         // Stop location updates
         if dataManager.useGPS {
             locationManager.stopUpdatingLocation()
         }
     }
-    
+
     // Outlier detection
     func isRunOutlier(modelContext: ModelContext) -> (isOutlier: Bool, reason: String) {
-        // Get all runs and filter manually
         let oneMonthAgo = Calendar.current.date(byAdding: .month, value: -1, to: Date())!
-        
+
         do {
-            // Fetch ALL runs, no predicate
             let descriptor = FetchDescriptor<Run>(sortBy: [SortDescriptor(\.date, order: .reverse)])
             let allRuns = try modelContext.fetch(descriptor)
-            
-            // Filter manually in Swift
+
             let recentRuns = allRuns.filter { run in
                 run.distance == self.selectedDistance && run.date > oneMonthAgo
             }
-            
+
             // Need at least 3 previous runs to compare
             guard recentRuns.count >= 3 else {
                 return (false, "")
             }
-            
-            // Calculate the median time of recent runs (better than using just the fastest)
+
             let sortedTimes = recentRuns.map { $0.elapsedTime }.sorted()
             let medianTime = sortedTimes[sortedTimes.count / 2]
-            
-            // Check if current run is too slow or too fast compared to typical performance
+
             if elapsedTime > medianTime * 1.5 {
                 return (true, "Over 50% slower than recent typical time")
             } else if elapsedTime < medianTime * 0.6 {
                 return (true, "Under 60% of recent typical time")
             }
-            
+
             return (false, "")
-            
+
         } catch {
-            print("Error checking for outlier: \(error)")
+            logger.error("Error checking for outlier: \(error)")
             return (false, "")
         }
+    }
+}
+
+// MARK: - Async Run Updates
+extension SprintTimerViewModel {
+    /// Re-fetches a run by ID on the main context and applies a mutation, then saves.
+    @MainActor
+    private func updateRun(id: UUID, apply: (Run) -> Void) async {
+        let context = DataManager.shared.modelContainer.mainContext
+        let descriptor = FetchDescriptor<Run>()
+        do {
+            let runs = try context.fetch(descriptor)
+            if let run = runs.first(where: { $0.id == id }) {
+                apply(run)
+                try context.save()
+            }
+        } catch {
+            logger.error("Failed to update run \(id): \(error)")
+        }
+    }
+}
+
+// MARK: - Reverse Geocoding
+import MapKit
+
+extension SprintTimerViewModel {
+    private func reverseGeocode(location: CLLocation) async -> String? {
+        guard let request = MKReverseGeocodingRequest(location: location) else { return nil }
+        do {
+            let mapItems = try await request.mapItems
+            if let address = mapItems.first?.address {
+                let name = address.shortAddress ?? address.fullAddress
+                return name.isEmpty ? nil : name
+            }
+        } catch {
+            logger.error("Reverse geocoding failed: \(error)")
+        }
+        return nil
     }
 }
 
@@ -504,7 +622,6 @@ extension SprintTimerViewModel: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         Task { @MainActor in
             currentLocation = locations.last
-            // Collect route points while running for distance/speed/altitude calculations
             if isRunning {
                 routeLocations.append(contentsOf: locations)
             }

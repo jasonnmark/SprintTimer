@@ -26,6 +26,8 @@ struct iOSSettingsView: View {
                     
                     if dataManager.startMode == .countdown {
                         Picker("Countdown Time", selection: $dataManager.countdownTime) {
+                            Text("3 seconds").tag(3)
+                            Text("5 seconds").tag(5)
                             Text("10 seconds").tag(10)
                             Text("15 seconds").tag(15)
                             Text("20 seconds").tag(20)
@@ -222,7 +224,6 @@ struct iOSSettingsView: View {
     
     private func updateDebugInfo() async {
         debugInfo = await dataManager.getDebugInfo()
-        print(debugInfo)
     }
     
     @MainActor
@@ -329,12 +330,10 @@ struct iOSSettingsView: View {
         // Save all runs
         do {
             try modelContext.save()
-            print("✅ Test data added: 10 x 100m runs and 3 x 200m runs")
-            
             // Refresh the UI
             await updateDebugInfo()
         } catch {
-            print("❌ Error adding test data: \(error)")
+            // Test data generation failed
         }
     }
     
@@ -358,12 +357,10 @@ struct iOSSettingsView: View {
             // Clear all daily notes
             DailyNotesManager.shared.clearAllNotes()
             
-            print("✅ All data cleared")
-            
             // Refresh the UI
             await updateDebugInfo()
         } catch {
-            print("❌ Error clearing data: \(error)")
+            // Clear data failed
         }
     }
 }

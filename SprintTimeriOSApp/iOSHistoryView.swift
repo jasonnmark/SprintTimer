@@ -143,9 +143,7 @@ struct iOSHistoryView: View {
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .active {
-                // Force a refresh when app becomes active
                 lastRefresh = Date()
-                print("History view refreshing...")
             }
         }
     }
@@ -422,7 +420,7 @@ struct RunNoteEditorView: View {
             try DataManager.shared.modelContainer.mainContext.save()
             dismiss()
         } catch {
-            print("Error saving notes: \(error)")
+            // Note save failed
         }
     }
 }

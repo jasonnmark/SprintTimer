@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Combine
+import os
 
 #if os(iOS)
 import UIKit
@@ -8,6 +9,8 @@ import UIKit
 import WatchKit
 import WidgetKit
 #endif
+
+private let logger = Logger(subsystem: "com.JasonMark.SprintTimer", category: "DataManager")
 
 // Custom run type for user-defined distances
 struct CustomRunType: Codable, Identifiable, Equatable {
@@ -27,7 +30,7 @@ enum StartMode: String, CaseIterable {
     case countdown = "countdown"
     case motion = "motion"
     case tap = "tap"
-    
+
     var displayName: String {
         switch self {
         case .countdown:
@@ -38,7 +41,7 @@ enum StartMode: String, CaseIterable {
             return "Tap to Start"
         }
     }
-    
+
     var description: String {
         switch self {
         case .countdown:
@@ -53,14 +56,14 @@ enum StartMode: String, CaseIterable {
 
 class DataManager: ObservableObject {
     static let shared = DataManager()
-    
+
     let defaults: UserDefaults
     private let appGroupID = "group.com.JasonMark.SprintTimer"
     private var isInitializing = true
-    
+
     // Model container for SwiftData
     let modelContainer: ModelContainer
-    
+
     // Settings Keys
     private let startModeKey = "settings.startMode"
     private let countdownTimeKey = "settings.countdownTime"
@@ -78,7 +81,6 @@ class DataManager: ObservableObject {
     @Published var betaMode: Bool = false {
         didSet {
             defaults.set(betaMode, forKey: betaModeKey)
-            defaults.synchronize()
             if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     SyncManager.shared.syncSettings()
@@ -90,7 +92,6 @@ class DataManager: ObservableObject {
     @Published var hasSeenTutorial: Bool = false {
         didSet {
             defaults.set(hasSeenTutorial, forKey: hasSeenTutorialKey)
-            defaults.synchronize()
         }
     }
 
@@ -123,11 +124,8 @@ class DataManager: ObservableObject {
     // Settings Properties
     @Published var startMode: StartMode = .tap {
         didSet {
-            guard oldValue != startMode else { return } // Prevent unnecessary saves
+            guard oldValue != startMode else { return }
             defaults.set(startMode.rawValue, forKey: startModeKey)
-            defaults.synchronize() // Force immediate save
-            
-            // Add a small delay before syncing to ensure local save completes
             if !isInitializing {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     SyncManager.shared.syncSettings()
@@ -135,13 +133,10 @@ class DataManager: ObservableObject {
             }
         }
     }
-    
-    @Published var countdownTime: Int = 10 {
+
+    @Published var countdownTime: Int = 5 {
         didSet {
             defaults.set(countdownTime, forKey: countdownTimeKey)
-            defaults.synchronize() // Force immediate save
-            
-            // Add a small delay before syncing to ensure local save completes
             if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     SyncManager.shared.syncSettings()
@@ -149,13 +144,10 @@ class DataManager: ObservableObject {
             }
         }
     }
-    
+
     @Published var useGPS: Bool = true {
         didSet {
             defaults.set(useGPS, forKey: useGPSKey)
-            defaults.synchronize() // Force immediate save
-            
-            // Add a small delay before syncing to ensure local save completes
             if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     SyncManager.shared.syncSettings()
@@ -163,13 +155,10 @@ class DataManager: ObservableObject {
             }
         }
     }
-    
+
     @Published var useHealthKit: Bool = true {
         didSet {
             defaults.set(useHealthKit, forKey: useHealthKitKey)
-            defaults.synchronize() // Force immediate save
-            
-            // Add a small delay before syncing to ensure local save completes
             if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     SyncManager.shared.syncSettings()
@@ -177,13 +166,10 @@ class DataManager: ObservableObject {
             }
         }
     }
-    
+
     @Published var trackWeather: Bool = false {
         didSet {
             defaults.set(trackWeather, forKey: trackWeatherKey)
-            defaults.synchronize() // Force immediate save
-            
-            // Add a small delay before syncing to ensure local save completes
             if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     SyncManager.shared.syncSettings()
@@ -191,13 +177,10 @@ class DataManager: ObservableObject {
             }
         }
     }
-    
+
     @Published var trackAltitude: Bool = true {
         didSet {
             defaults.set(trackAltitude, forKey: trackAltitudeKey)
-            defaults.synchronize() // Force immediate save
-            
-            // Add a small delay before syncing to ensure local save completes
             if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     SyncManager.shared.syncSettings()
@@ -205,13 +188,10 @@ class DataManager: ObservableObject {
             }
         }
     }
-    
+
     @Published var saveTapTime: Bool = true {
         didSet {
             defaults.set(saveTapTime, forKey: saveTapTimeKey)
-            defaults.synchronize() // Force immediate save
-            
-            // Add a small delay before syncing to ensure local save completes
             if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     SyncManager.shared.syncSettings()
@@ -219,13 +199,10 @@ class DataManager: ObservableObject {
             }
         }
     }
-    
+
     @Published var saveGPSTime: Bool = false {
         didSet {
             defaults.set(saveGPSTime, forKey: saveGPSTimeKey)
-            defaults.synchronize() // Force immediate save
-            
-            // Add a small delay before syncing to ensure local save completes
             if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     SyncManager.shared.syncSettings()
@@ -233,64 +210,61 @@ class DataManager: ObservableObject {
             }
         }
     }
-    
+
     private init() {
         // Initialize UserDefaults
         guard let groupDefaults = UserDefaults(suiteName: appGroupID) else {
             fatalError("Failed to create UserDefaults for app group: \(appGroupID)")
         }
         self.defaults = groupDefaults
-        
+
         // Initialize SwiftData
         let schema = Schema([Run.self])
-        
+
         guard let groupURL = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupID
         ) else {
             fatalError("App Group container could not be created.")
         }
-        
+
         let databaseURL = groupURL.appendingPathComponent("SprintTimer.sqlite")
-        
+
         let modelConfiguration = ModelConfiguration(
             schema: schema,
             url: databaseURL,
             allowsSave: true
         )
-        
+
         do {
             self.modelContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])
-            print("✅ DataManager: SwiftData initialized at \(databaseURL.path)")
+            logger.info("SwiftData initialized at \(databaseURL.path)")
         } catch {
-            print("❌ DataManager: Failed to create ModelContainer: \(error)")
-            print("Attempting to delete existing database and retry...")
-            
+            logger.error("Failed to create ModelContainer: \(error). Attempting database reset...")
+
             // Try to delete the existing database
             try? FileManager.default.removeItem(at: databaseURL)
             try? FileManager.default.removeItem(at: databaseURL.appendingPathExtension("sqlite-shm"))
             try? FileManager.default.removeItem(at: databaseURL.appendingPathExtension("sqlite-wal"))
-            
+
             // Try again
             do {
                 self.modelContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])
-                print("✅ DataManager: SwiftData initialized after database reset")
+                logger.info("SwiftData initialized after database reset")
             } catch {
                 fatalError("Could not create ModelContainer after reset: \(error)")
             }
         }
-        
+
         // Initialize settings with defaults
         initializeDefaults()
-        
+
         // Load current values
         loadSettings()
-        
+
         // Mark initialization as complete
         isInitializing = false
-        
-        print("✅ DataManager initialized successfully")
     }
-    
+
     private func initializeDefaults() {
         // Set defaults if never saved
         if defaults.object(forKey: useGPSKey) == nil {
@@ -315,16 +289,14 @@ class DataManager: ObservableObject {
             defaults.set(StartMode.tap.rawValue, forKey: startModeKey)
         }
         if defaults.object(forKey: countdownTimeKey) == nil {
-            defaults.set(10, forKey: countdownTimeKey)
+            defaults.set(5, forKey: countdownTimeKey)
         }
-        
-        defaults.synchronize()
     }
-    
+
     private func loadSettings() {
         let savedMode = defaults.string(forKey: startModeKey) ?? StartMode.tap.rawValue
         startMode = StartMode(rawValue: savedMode) ?? .tap
-        countdownTime = defaults.integer(forKey: countdownTimeKey) > 0 ? defaults.integer(forKey: countdownTimeKey) : 10
+        countdownTime = defaults.integer(forKey: countdownTimeKey) > 0 ? defaults.integer(forKey: countdownTimeKey) : 5
         useGPS = defaults.bool(forKey: useGPSKey)
         useHealthKit = defaults.bool(forKey: useHealthKitKey)
         trackWeather = defaults.bool(forKey: trackWeatherKey)
@@ -339,7 +311,6 @@ class DataManager: ObservableObject {
     private func saveCustomRunTypes() {
         if let data = try? JSONEncoder().encode(customRunTypes) {
             defaults.set(data, forKey: customRunTypesKey)
-            defaults.synchronize()
         }
     }
 
@@ -349,18 +320,15 @@ class DataManager: ObservableObject {
             customRunTypes = types
         }
     }
-    
+
     func refresh() {
-        defaults.synchronize()
         loadSettings()
     }
-    
+
     // MARK: - Debug Info
-    
+
     @MainActor
     func getDebugInfo() async -> String {
-        defaults.synchronize()
-        
         var info = "=== DEBUG INFO ===\n"
         info += "App Group: \(appGroupID)\n"
         #if os(iOS)
@@ -369,7 +337,7 @@ class DataManager: ObservableObject {
         info += "Platform: watchOS\n"
         #endif
         info += "Time: \(Date().formatted())\n\n"
-        
+
         info += "--- SETTINGS ---\n"
         info += "Start Mode: \(startMode.rawValue)\n"
         info += "Countdown: \(countdownTime)s\n"
@@ -379,12 +347,12 @@ class DataManager: ObservableObject {
         info += "Altitude: \(trackAltitude)\n"
         info += "Save Tap Time: \(saveTapTime)\n"
         info += "Save GPS Time: \(saveGPSTime)\n\n"
-        
+
         info += "--- DATA ---\n"
         let runCount = await getRunCount()
         info += "Total Runs: \(runCount)\n"
         info += "Daily Notes: \(DailyNotesManager.shared.dailyNotes.count)\n\n"
-        
+
         info += "--- SYNC STATUS ---\n"
         if WCSession.isSupported() {
             let session = WCSession.default
@@ -397,7 +365,7 @@ class DataManager: ObservableObject {
         } else {
             info += "WCSession: Not supported\n"
         }
-        
+
         info += "\n--- RECENT RUNS ---\n"
         if let recentRuns = await getRecentRuns(limit: 3) {
             for (index, run) in recentRuns.enumerated() {
@@ -405,10 +373,10 @@ class DataManager: ObservableObject {
                 info += "   \(run.formattedDate)\n"
             }
         }
-        
+
         return info
     }
-    
+
     @MainActor
     func getRunCount() async -> Int {
         do {
@@ -416,11 +384,11 @@ class DataManager: ObservableObject {
             let runs = try modelContainer.mainContext.fetch(descriptor)
             return runs.count
         } catch {
-            print("Error fetching runs: \(error)")
+            logger.error("Error fetching runs: \(error)")
             return -1
         }
     }
-    
+
     @MainActor
     func getRecentRuns(limit: Int) async -> [Run]? {
         do {
@@ -430,19 +398,18 @@ class DataManager: ObservableObject {
             let runs = try modelContainer.mainContext.fetch(descriptor)
             return Array(runs.prefix(limit))
         } catch {
-            print("Error fetching recent runs: \(error)")
+            logger.error("Error fetching recent runs: \(error)")
             return nil
         }
     }
-    
+
     // MARK: - History Management
-    
+
     @MainActor
     func saveRun(_ run: Run) {
         modelContainer.mainContext.insert(run)
         do {
             try modelContainer.mainContext.save()
-            print("✅ DataManager: Run saved successfully")
 
             // Sync to other device
             let runData = SyncManager.shared.runToSyncData(run)
@@ -452,7 +419,7 @@ class DataManager: ObservableObject {
             updateComplicationData(lastRun: run)
 
         } catch {
-            print("❌ DataManager: Failed to save run: \(error)")
+            logger.error("Failed to save run: \(error)")
         }
     }
 
@@ -469,28 +436,27 @@ class DataManager: ObservableObject {
             let todayCount = allRuns.filter { $0.date >= startOfDay }.count
             defaults.set(todayCount, forKey: "complication.todayRunCount")
         } catch {
-            print("Error counting today's runs: \(error)")
+            logger.error("Error counting today's runs: \(error)")
         }
-        defaults.synchronize()
 
         // Reload complications
         #if os(watchOS)
         WidgetCenter.shared.reloadAllTimelines()
         #endif
     }
-    
+
     @MainActor
     func deleteRun(_ run: Run) {
         let runId = run.id
         modelContainer.mainContext.delete(run)
         do {
             try modelContainer.mainContext.save()
-            
+
             // Sync deletion to other device
             SyncManager.shared.syncRunDeletion(runId)
-            
+
         } catch {
-            print("❌ DataManager: Failed to delete run: \(error)")
+            logger.error("Failed to delete run: \(error)")
         }
     }
 }

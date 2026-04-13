@@ -301,7 +301,7 @@ struct iOSExportView: View {
         do {
             try csvString.write(to: path, atomically: true, encoding: .utf8)
         } catch {
-            print("Error creating Excel/CSV: \(error)")
+            // CSV creation failed
         }
         
         return path
@@ -384,7 +384,7 @@ struct iOSExportView: View {
             let jsonData = try JSONSerialization.data(withJSONObject: jsonArray, options: .prettyPrinted)
             try jsonData.write(to: path)
         } catch {
-            print("Error creating JSON: \(error)")
+            // JSON creation failed
         }
         
         return path

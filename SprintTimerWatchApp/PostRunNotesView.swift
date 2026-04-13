@@ -18,10 +18,10 @@ struct PostRunNotesView: View {
 
 #if os(watchOS)
             TextField("Tap to dictate...", text: $noteText, axis: .vertical)
-                .font(.system(size: 12))
+                .font(.system(size: 16))
                 .focused($isTextFieldFocused)
-                .focusable()
                 .padding(.horizontal, 8)
+                .padding(.vertical, 6)
 #else
             TextEditor(text: $noteText)
                 .font(.body)

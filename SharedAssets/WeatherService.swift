@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import Security
 
 struct WeatherData {
     let temperature: Double       // Celsius
@@ -21,20 +22,52 @@ struct AQIData {
 class WeatherService {
     static let shared = WeatherService()
 
-    private let defaults = UserDefaults(suiteName: "group.com.JasonMark.SprintTimer")
-    private let apiKeyKey = "settings.openWeatherAPIKey"
+    private let keychainAccount = "com.JasonMark.SprintTimer.openWeatherAPIKey"
 
     var apiKey: String {
-        get { defaults?.string(forKey: apiKeyKey) ?? "" }
-        set {
-            defaults?.set(newValue, forKey: apiKeyKey)
-            defaults?.synchronize()
-        }
+        get { readKeychain() ?? "" }
+        set { saveKeychain(newValue) }
     }
 
     var hasAPIKey: Bool {
         !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+
+    // MARK: - Keychain
+
+    private func readKeychain() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: keychainAccount,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private func saveKeychain(_ value: String) {
+        // Delete existing item first
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: keychainAccount
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
+
+        guard !value.isEmpty, let data = value.data(using: .utf8) else { return }
+
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: keychainAccount,
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+        ]
+        SecItemAdd(addQuery as CFDictionary, nil)
+    }
+
+    // MARK: - API
 
     func fetchWeather(for location: CLLocation) async -> WeatherData? {
         guard hasAPIKey else { return nil }
@@ -48,7 +81,6 @@ class WeatherService {
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                print("Weather API error: bad status code")
                 return nil
             }
 
@@ -87,7 +119,6 @@ class WeatherService {
                 weatherCondition: condition
             )
         } catch {
-            print("Weather fetch error: \(error)")
             return nil
         }
     }
@@ -117,7 +148,6 @@ class WeatherService {
 
             return AQIData(aqi: aqi)
         } catch {
-            print("AQI fetch error: \(error)")
             return nil
         }
     }
