@@ -7,84 +7,90 @@ struct NotesView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var noteText = ""
-    @FocusState private var isTextFieldFocused: Bool
-    
+
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 8) {
-                Text("Run Notes")
-                    .font(.system(size: 14, weight: .bold))
-                
+        VStack(spacing: 6) {
 #if os(watchOS)
-                TextField("Add run notes...", text: $noteText, axis: .vertical)
-                    .font(.system(size: 16))
-                    .focused($isTextFieldFocused)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    Button("Cancel") { handleFinish(saveNotes: false) }
+                        .buttonStyle(.bordered)
+                        .tint(.red)
+                        .font(.body)
+
+                    Button("Done") { handleFinish(saveNotes: true) }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
+                        .font(.body)
+                        .disabled(noteText.isEmpty)
+                }
+                .padding(.horizontal)
+
+                ScrollView {
+                    Text(noteText.isEmpty ? "Tap mic to dictate" : noteText)
+                        .font(.system(size: 32, weight: .medium))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                        .foregroundColor(noteText.isEmpty ? .gray : .primary)
+                }
+
+                TextFieldLink(prompt: Text("Speak your note...")) {
+                    Label("Dictate", systemImage: "mic.fill")
+                        .font(.title3)
+                        .frame(maxWidth: .infinity)
+                } onSubmit: { result in
+                    noteText = result
+                }
+                .padding(.horizontal)
+            }
+            .ignoresSafeArea(edges: .bottom)
 #else
-                TextEditor(text: $noteText)
-                    .font(.body)
-                    .frame(minHeight: 120)
-                    .padding(.horizontal, 8)
+            Text("Run Notes")
+                .font(.system(size: 14, weight: .bold))
+
+            TextEditor(text: $noteText)
+                .font(.body)
+                .frame(minHeight: 120)
+                .padding(.horizontal, 8)
+
+            HStack(spacing: 12) {
+                Button("Cancel") {
+                    handleFinish(saveNotes: false)
+                }
+                .buttonStyle(.bordered)
+
+                Button("Save") {
+                    handleFinish(saveNotes: true)
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(.top, 6)
 #endif
 
-                HStack(spacing: 12) {
-                    Button("Cancel") {
-                        handleFinish(saveNotes: false)
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button("Save") {
-                        handleFinish(saveNotes: true)
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .padding(.top, 6)
-                
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, 8)
-            .navigationBarHidden(true)
+            Spacer(minLength: 0)
         }
+        .navigationBarHidden(true)
         .onAppear {
-            // Start with whatever notes were previously stored (if any)
             noteText = viewModel.currentRunNotes
-
-            // Focus the text field on watch to bring up keyboard/dictation automatically
-            #if os(watchOS)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isTextFieldFocused = true
-            }
-            #endif
         }
     }
-    
+
     private func handleFinish(saveNotes: Bool) {
         if saveNotes {
             if let editingRun = viewModel.currentEditingRun {
-                // We're editing an existing run from history
                 editingRun.notes = noteText
-                // The run is already in the model context, just save it
                 try? modelContext.save()
-                // Clear the editing reference
                 viewModel.currentEditingRun = nil
             } else {
-                // We're creating a new run (original behavior)
                 viewModel.currentRunNotes = noteText
                 viewModel.saveCurrentRun(modelContext: modelContext)
                 viewModel.resetTimer()
-                // Dismiss RunnerView to return to home
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    NotificationCenter.default.post(name: Notification.Name("DismissRunnerView"), object: nil)
-                }
             }
         } else {
-            // Cancel: clear editing reference if we were editing
             if viewModel.currentEditingRun != nil {
                 viewModel.currentEditingRun = nil
             }
         }
-        // Dismiss ONLY the notes sheet
         dismiss()
     }
 }

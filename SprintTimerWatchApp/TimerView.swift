@@ -68,9 +68,6 @@ struct TimerView: View {
                 savedElapsedTime = 0
                 isInLongPressMode = false
                 tapHandled = false
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(name: Notification.Name("DismissRunnerView"), object: nil)
-                }
             }
             Button("Delete Run", role: .destructive) {
                 // Delete the run and reset
@@ -148,79 +145,64 @@ struct TimerView: View {
     
     @ViewBuilder
     private func actionMenuContent() -> some View {
-        VStack(spacing: 14) {
-            Spacer(minLength: 40)
-
-            // Save Run button
-            Button(action: {
-                saveRun()
-            }) {
+        VStack(spacing: 6) {
+            Button(action: { saveRun() }) {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 24))
-                        .padding(.leading, 10)
-                    Text("Save Run")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 32))
+                    Text("Save")
+                        .font(.system(size: 22, weight: .semibold))
                     Spacer(minLength: 0)
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 12)
-                .padding(.trailing, 10)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
                 .background(Color.green.opacity(0.75))
-                .cornerRadius(12)
+                .cornerRadius(10)
             }
             .buttonStyle(PlainButtonStyle())
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 4)
 
-            // Save with Run Notes button
-            Button(action: {
-                saveWithNotes()
-            }) {
+            Button(action: { saveWithNotes() }) {
                 HStack(spacing: 8) {
                     Image(systemName: "note.text.badge.plus")
-                        .font(.system(size: 24))
-                        .padding(.leading, 10)
-                    Text("Save w/Notes")
-                        .font(.system(size: 20, weight: .semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
+                        .font(.system(size: 32))
+                    Text("Notes")
+                        .font(.system(size: 22, weight: .semibold))
                     Spacer(minLength: 0)
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 12)
-                .padding(.trailing, 10)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
                 .background(Color.blue.opacity(0.75))
-                .cornerRadius(12)
+                .cornerRadius(10)
             }
             .buttonStyle(PlainButtonStyle())
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 4)
 
-            // Delete Run button
-            Button(action: {
-                deleteRun()
-            }) {
+            Button(action: { deleteRun() }) {
                 HStack(spacing: 8) {
                     Image(systemName: "trash.fill")
-                        .font(.system(size: 24))
-                        .padding(.leading, 10)
+                        .font(.system(size: 32))
                     Text("Delete")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 22, weight: .semibold))
                     Spacer(minLength: 0)
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 12)
-                .padding(.trailing, 10)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
                 .background(Color.red.opacity(0.75))
-                .cornerRadius(12)
+                .cornerRadius(10)
             }
             .buttonStyle(PlainButtonStyle())
-            .padding(.horizontal, 8)
+            .padding(.horizontal, 4)
 
-            Spacer()
+            Spacer(minLength: 0)
         }
+        .padding(.top, 32)
     }
     
     private func saveRun() {
@@ -230,10 +212,6 @@ struct TimerView: View {
         savedElapsedTime = 0
         isInLongPressMode = false
         tapHandled = false
-        // Return to home screen after saving
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: Notification.Name("DismissRunnerView"), object: nil)
-        }
     }
     
     private func deleteRun() {

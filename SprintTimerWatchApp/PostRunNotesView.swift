@@ -5,10 +5,49 @@ struct PostRunNotesView: View {
     let run: Run
     @Environment(\.dismiss) private var dismiss
     @State private var noteText = ""
-    @FocusState private var isTextFieldFocused: Bool
-
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
+#if os(watchOS)
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    Button("Skip") { dismiss() }
+                        .buttonStyle(.bordered)
+                        .tint(.gray)
+                        .font(.body)
+
+                    Button("Save") {
+                        if !noteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            run.notes = noteText
+                            try? DataManager.shared.modelContainer.mainContext.save()
+                        }
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                    .font(.body)
+                    .disabled(noteText.isEmpty)
+                }
+                .padding(.horizontal)
+
+                ScrollView {
+                    Text(noteText.isEmpty ? "Tap mic to dictate" : noteText)
+                        .font(.system(size: 32, weight: .medium))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal)
+                        .foregroundColor(noteText.isEmpty ? .gray : .primary)
+                }
+
+                TextFieldLink(prompt: Text("Speak your note...")) {
+                    Label("Dictate", systemImage: "mic.fill")
+                        .font(.title3)
+                        .frame(maxWidth: .infinity)
+                } onSubmit: { result in
+                    noteText = result
+                }
+                .padding(.horizontal)
+            }
+            .ignoresSafeArea(edges: .bottom)
+#else
             Text("Add Notes?")
                 .font(.system(size: 16, weight: .bold))
 
@@ -16,18 +55,10 @@ struct PostRunNotesView: View {
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(.gray)
 
-#if os(watchOS)
-            TextField("Tap to dictate...", text: $noteText, axis: .vertical)
-                .font(.system(size: 16))
-                .focused($isTextFieldFocused)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-#else
             TextEditor(text: $noteText)
                 .font(.body)
                 .frame(minHeight: 80)
                 .padding(.horizontal, 8)
-#endif
 
             HStack(spacing: 12) {
                 Button("Skip") {
@@ -45,17 +76,12 @@ struct PostRunNotesView: View {
                 .buttonStyle(.borderedProminent)
             }
             .padding(.top, 4)
+#endif
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 8)
         .onAppear {
             noteText = run.notes
-            #if os(watchOS)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isTextFieldFocused = true
-            }
-            #endif
         }
     }
 }

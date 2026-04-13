@@ -32,13 +32,30 @@ struct iOSHistoryView: View {
         return allRuns.filter { $0.distance == selectedDistance }
     }
     
-    // Group runs by day
-    var runsByDay: [(date: Date, runs: [Run])] {
+    // Group runs by day, then by location within each day
+    var runsByDay: [(date: Date, locationGroups: [(location: String, runs: [Run])])] {
         let grouped = Dictionary(grouping: filteredRuns) { run in
             Calendar.current.startOfDay(for: run.date)
         }
-        return grouped.map { (date: $0.key, runs: $0.value) }
-            .sorted { $0.date > $1.date }
+        return grouped.map { (date, runs) in
+            let locationGrouped = Dictionary(grouping: runs) { run in
+                run.locationName ?? "Unknown Location"
+            }
+            let sortedLocations = locationGrouped.map { (location: $0.key, runs: $0.value.sorted { $0.date < $1.date }) }
+                .sorted { ($0.runs.first?.date ?? .distantPast) < ($1.runs.first?.date ?? .distantPast) }
+            return (date: date, locationGroups: sortedLocations)
+        }
+        .sorted { $0.date > $1.date }
+    }
+
+    // Total run count for a day
+    private func runCount(for day: (date: Date, locationGroups: [(location: String, runs: [Run])])) -> Int {
+        day.locationGroups.reduce(0) { $0 + $1.runs.count }
+    }
+
+    // All runs for a day (flat)
+    private func allRuns(for day: (date: Date, locationGroups: [(location: String, runs: [Run])])) -> [Run] {
+        day.locationGroups.flatMap { $0.runs }
     }
     
     var body: some View {
@@ -69,12 +86,12 @@ struct iOSHistoryView: View {
                     ForEach(runsByDay, id: \.date) { dayData in
                         Section(header: DayHeaderView(
                             date: dayData.date,
-                            runCount: dayData.runs.count,
+                            runCount: runCount(for: dayData),
                             isSelected: selectedDays.contains(dayData.date),
                             editMode: editMode,
                             hasDayNote: dailyNotesManager.hasNote(for: dayData.date),
                             onToggle: {
-                                toggleDaySelection(dayData.date, runs: dayData.runs)
+                                toggleDaySelection(dayData.date, runs: allRuns(for: dayData))
                             },
                             onNotesTapped: {
                                 noteType = .day
@@ -82,23 +99,31 @@ struct iOSHistoryView: View {
                                 showingNoteEditor = true
                             }
                         )) {
-                            ForEach(dayData.runs) { run in
-                                RunRowView(
-                                    run: run,
-                                    isSelected: selectedRuns.contains(run.id),
-                                    editMode: editMode,
-                                    onToggle: {
-                                        toggleRunSelection(run.id)
-                                    },
-                                    onNotesTapped: {
-                                        noteType = .run
-                                        selectedItem = run
-                                        showingNoteEditor = true
-                                    }
+                            ForEach(dayData.locationGroups, id: \.location) { locationGroup in
+                                LocationHeaderView(
+                                    locationName: locationGroup.location,
+                                    runs: locationGroup.runs
                                 )
-                            }
-                            .onDelete { indexSet in
-                                deleteRuns(at: indexSet, from: dayData.runs)
+                                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
+
+                                ForEach(locationGroup.runs) { run in
+                                    RunRowView(
+                                        run: run,
+                                        isSelected: selectedRuns.contains(run.id),
+                                        editMode: editMode,
+                                        onToggle: {
+                                            toggleRunSelection(run.id)
+                                        },
+                                        onNotesTapped: {
+                                            noteType = .run
+                                            selectedItem = run
+                                            showingNoteEditor = true
+                                        }
+                                    )
+                                }
+                                .onDelete { indexSet in
+                                    deleteRuns(at: indexSet, from: locationGroup.runs)
+                                }
                             }
                         }
                     }
@@ -259,6 +284,141 @@ struct DayHeaderView: View {
     }
 }
 
+struct LocationHeaderView: View {
+    let locationName: String
+    let runs: [Run]
+
+    // Use weather from the first run that has it
+    private var weatherRun: Run? {
+        runs.first { $0.weatherCondition != nil }
+    }
+
+    private var weatherIcon: String {
+        switch weatherRun?.weatherCondition?.lowercased() {
+        case "clear": return "sun.max.fill"
+        case "clouds": return "cloud.fill"
+        case "rain", "drizzle": return "cloud.rain.fill"
+        case "thunderstorm": return "cloud.bolt.rain.fill"
+        case "snow": return "cloud.snow.fill"
+        case "mist", "fog", "haze": return "cloud.fog.fill"
+        default: return "cloud.fill"
+        }
+    }
+
+    private var tempString: String? {
+        guard let temp = weatherRun?.temperature else { return nil }
+        let fahrenheit = temp * 9.0 / 5.0 + 32.0
+        return String(format: "%.0f°F", fahrenheit)
+    }
+
+    private var feelsLikeString: String? {
+        guard let fl = weatherRun?.feelsLike else { return nil }
+        let fahrenheit = fl * 9.0 / 5.0 + 32.0
+        return String(format: "%.0f°F", fahrenheit)
+    }
+
+    private var altitudeString: String? {
+        guard let alt = weatherRun?.altitude ?? runs.first(where: { $0.altitude != nil })?.altitude else { return nil }
+        let feet = alt * 3.28084
+        return String(format: "%.0f ft", feet)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // Location name
+            HStack(spacing: 4) {
+                Image(systemName: "mappin.circle.fill")
+                    .foregroundColor(.orange)
+                    .font(.caption)
+                Text(locationName)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+            }
+
+            HStack(spacing: 12) {
+                // Weather
+                if let condition = weatherRun?.weatherCondition, let temp = tempString {
+                    HStack(spacing: 3) {
+                        Image(systemName: weatherIcon)
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                        Text("\(condition) \(temp)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        if let fl = feelsLikeString {
+                            Text("(feels \(fl))")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                // Humidity
+                if let humidity = weatherRun?.humidity {
+                    HStack(spacing: 2) {
+                        Image(systemName: "humidity.fill")
+                            .font(.caption2)
+                            .foregroundColor(.cyan)
+                        Text("\(Int(humidity))%")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                // Wind
+                if let wind = weatherRun?.windSpeed {
+                    HStack(spacing: 2) {
+                        Image(systemName: "wind")
+                            .font(.caption2)
+                            .foregroundColor(.teal)
+                        Text(String(format: "%.0f mph", wind * 2.237))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                // Altitude
+                if let alt = altitudeString {
+                    HStack(spacing: 2) {
+                        Image(systemName: "mountain.2.fill")
+                            .font(.caption2)
+                            .foregroundColor(.brown)
+                        Text(alt)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                // AQI
+                if let aqi = weatherRun?.aqi {
+                    HStack(spacing: 2) {
+                        Image(systemName: "aqi.medium")
+                            .font(.caption2)
+                            .foregroundColor(aqi <= 2 ? .green : aqi <= 3 ? .yellow : .red)
+                        Text("AQI \(aqi)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                // UV Index
+                if let uv = weatherRun?.uvIndex {
+                    HStack(spacing: 2) {
+                        Image(systemName: "sun.max.trianglebadge.exclamationmark.fill")
+                            .font(.caption2)
+                            .foregroundColor(uv <= 2 ? .green : uv <= 5 ? .yellow : .red)
+                        Text("UV \(uv)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 struct RunRowView: View {
     let run: Run
     let isSelected: Bool
@@ -302,20 +462,37 @@ struct RunRowView: View {
                                 .foregroundColor(.blue)
                         }
                         
-                        if let startHR = run.startHeartRate {
-                            Label("\(Int(startHR))", systemImage: "heart")
-                                .font(.caption)
-                                .foregroundColor(.red)
-                        }
-                        if let endHR = run.endHeartRate {
-                            Label("\(Int(endHR))", systemImage: "heart.fill")
-                                .font(.caption)
-                                .foregroundColor(.red)
+                        if run.averageHeartRate != nil || run.maxHeartRate != nil {
+                            HStack(spacing: 2) {
+                                Image(systemName: "heart.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                                if let avg = run.averageHeartRate {
+                                    Text("\(Int(avg))")
+                                        .font(.caption)
+                                        .foregroundColor(.red)
+                                }
+                                if let max = run.maxHeartRate {
+                                    Text("/ \(Int(max))")
+                                        .font(.caption)
+                                        .foregroundColor(.red.opacity(0.7))
+                                }
+                            }
                         }
                         if let steps = run.steps, steps > 0 {
                             Label("\(steps)", systemImage: "figure.walk")
                                 .font(.caption)
                                 .foregroundColor(.green)
+                        }
+                        if let stride = run.strideLength, stride > 0 {
+                            Label(String(format: "%.1fm", stride), systemImage: "ruler")
+                                .font(.caption)
+                                .foregroundColor(.purple)
+                        }
+                        if let altGain = run.altitudeGain, altGain > 0 {
+                            Label(String(format: "+%.0fft", altGain * 3.28084), systemImage: "arrow.up.right")
+                                .font(.caption)
+                                .foregroundColor(.brown)
                         }
                     }
                 }

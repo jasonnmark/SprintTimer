@@ -188,6 +188,9 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         if let error = error {
             logger.error("Activation failed: \(error)")
         } else {
+            // Initialize applicationContext to prevent "Application context data is nil" warning
+            try? session.updateApplicationContext([:])
+
             // Request full sync on activation
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
                 self?.requestFullSync()

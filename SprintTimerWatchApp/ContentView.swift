@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var showingSettings = false
     @State private var showingRunner = false
     @State private var showingHistory = false
+    @FocusState private var pickerFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -21,9 +22,11 @@ struct ContentView: View {
                     }
                 }
                 .pickerStyle(WheelPickerStyle())
+                .focused($pickerFocused)
                 .frame(height: 65)
                 .labelsHidden()
                 .padding(.top, 20)
+                .onAppear { pickerFocused = true }
                 
                 // Start Run Button
                 Button(action: {

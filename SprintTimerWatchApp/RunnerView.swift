@@ -20,12 +20,12 @@ struct RunnerView: View {
             .ignoresSafeArea()
             .navigationBarHidden(true)
 
-            // NEW: Run notes sheet (invoked from Save w/Notes and from Pause menu)
+            // Run notes sheet (invoked from Save w/Notes)
             .sheet(isPresented: $showingRunNotesSheet) {
                 NotesView(viewModel: viewModel)
             }
 
-            // (Optional) Day notes sheet — you already fire ShowDayNotes from the pause sheet
+            // Day notes sheet
             .sheet(isPresented: $showingDayNotesSheet) {
                 DayNotesView(viewModel: viewModel)
             }
@@ -47,20 +47,17 @@ struct RunnerView: View {
                 }
             }
 
-            // Keep your existing dismiss hook
+            // Dismiss hook
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("DismissRunnerView"))) { _ in
                 isPresented = false
             }
 
-            // CHANGED: Instead of invoking QuickBoard, we now open the sheet
+            // Open notes sheet
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowRunNotes"))) { notification in
-                // If we have a run object passed from history, load its notes
                 if let run = notification.object as? Run {
                     viewModel.currentRunNotes = run.notes
-                    viewModel.currentEditingRun = run  // Store reference for saving back
+                    viewModel.currentEditingRun = run
                 }
-                
-                // Give any menu/animation a tick to settle
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     showingRunNotesSheet = true
                 }
@@ -68,7 +65,6 @@ struct RunnerView: View {
 
             // Post-run notes prompt after saving
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowPostRunNotes"))) { _ in
-                // Find the most recently saved run
                 let descriptor = FetchDescriptor<Run>(sortBy: [SortDescriptor(\.date, order: .reverse)])
                 if let runs = try? modelContext.fetch(descriptor), let latest = runs.first {
                     lastSavedRun = latest
@@ -78,13 +74,11 @@ struct RunnerView: View {
                 }
             }
 
-            // Keep day-notes path working from your pause menu
+            // Day notes
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowDayNotes"))) { notification in
-                // If we have a date object passed from history, load it for editing
                 if let date = notification.object as? Date {
                     viewModel.currentEditingDate = date
                 }
-                
                 DispatchQueue.main.async {
                     showingDayNotesSheet = true
                 }
