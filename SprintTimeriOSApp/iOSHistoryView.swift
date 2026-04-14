@@ -348,27 +348,24 @@ struct LocationHeaderView: View {
                     .foregroundColor(.primary)
             }
 
-            HStack(spacing: 12) {
-                // Weather
-                if let condition = weatherRun?.weatherCondition, let temp = tempString {
-                    HStack(spacing: 3) {
-                        Image(systemName: weatherIcon)
-                            .font(.caption2)
-                            .foregroundColor(.orange)
-                        Text("\(condition) \(temp)")
+            // Weather summary line
+            if let condition = weatherRun?.weatherCondition, let temp = tempString {
+                HStack(spacing: 4) {
+                    Image(systemName: weatherIcon)
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                    Text("\(condition) \(temp)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    if let fl = feelsLikeString {
+                        Text("(feels \(fl))")
                             .font(.caption2)
                             .foregroundColor(.secondary)
-                        if let fl = feelsLikeString {
-                            Text("(feels \(fl))")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
-                        }
                     }
-                }
-
-                // Humidity
-                if let humidity = weatherRun?.humidity {
-                    HStack(spacing: 2) {
+                    if let humidity = weatherRun?.humidity {
+                        Text("·")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
                         Image(systemName: "humidity.fill")
                             .font(.caption2)
                             .foregroundColor(.cyan)
@@ -376,11 +373,10 @@ struct LocationHeaderView: View {
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
-                }
-
-                // Wind
-                if let wind = weatherRun?.windSpeed {
-                    HStack(spacing: 2) {
+                    if let wind = weatherRun?.windSpeed {
+                        Text("·")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
                         Image(systemName: "wind")
                             .font(.caption2)
                             .foregroundColor(.teal)
@@ -389,8 +385,10 @@ struct LocationHeaderView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+            }
 
-                // Altitude
+            // Secondary details row
+            HStack(spacing: 12) {
                 if let alt = altitudeString {
                     HStack(spacing: 2) {
                         Image(systemName: "mountain.2.fill")
@@ -402,7 +400,6 @@ struct LocationHeaderView: View {
                     }
                 }
 
-                // AQI
                 if let aqi = weatherRun?.aqi {
                     HStack(spacing: 2) {
                         Image(systemName: "aqi.medium")
@@ -414,8 +411,7 @@ struct LocationHeaderView: View {
                     }
                 }
 
-                // UV Index
-                if let uv = weatherRun?.uvIndex {
+                if let uv = weatherRun?.uvIndex, uv > 0 {
                     HStack(spacing: 2) {
                         Image(systemName: "sun.max.trianglebadge.exclamationmark.fill")
                             .font(.caption2)
