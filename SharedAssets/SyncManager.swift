@@ -1,6 +1,7 @@
 import Foundation
 import WatchConnectivity
 import SwiftData
+import CoreLocation
 import os
 
 private let logger = Logger(subsystem: "com.JasonMark.SprintTimer", category: "SyncManager")
@@ -52,18 +53,33 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
             "notes": run.notes
         ]
 
-        // Use Mirror to read optional properties by key path
-        let mirror = Mirror(reflecting: run)
-        for child in mirror.children {
-            guard let label = child.label else { continue }
-            if Self.optionalDoubleKeys.contains(label), let value = child.value as? Double? {
-                if let v = value { data[label] = v }
-            } else if Self.optionalIntKeys.contains(label), let value = child.value as? Int? {
-                if let v = value { data[label] = v }
-            } else if Self.optionalStringKeys.contains(label), let value = child.value as? String? {
-                if let v = value { data[label] = v }
-            }
-        }
+        // Read optional properties explicitly (Mirror doesn't work reliably with SwiftData @Model)
+        if let v = run.latitude { data["latitude"] = v }
+        if let v = run.longitude { data["longitude"] = v }
+        if let v = run.altitude { data["altitude"] = v }
+        if let v = run.startHeartRate { data["startHeartRate"] = v }
+        if let v = run.endHeartRate { data["endHeartRate"] = v }
+        if let v = run.averageHeartRate { data["averageHeartRate"] = v }
+        if let v = run.maxHeartRate { data["maxHeartRate"] = v }
+        if let v = run.strideLength { data["strideLength"] = v }
+        if let v = run.actualDistance { data["actualDistance"] = v }
+        if let v = run.averageSpeed { data["averageSpeed"] = v }
+        if let v = run.altitudeGain { data["altitudeGain"] = v }
+        if let v = run.temperature { data["temperature"] = v }
+        if let v = run.feelsLike { data["feelsLike"] = v }
+        if let v = run.humidity { data["humidity"] = v }
+        if let v = run.pressure { data["pressure"] = v }
+        if let v = run.windSpeed { data["windSpeed"] = v }
+        if let v = run.windDirection { data["windDirection"] = v }
+        if let v = run.visibility { data["visibility"] = v }
+        if let v = run.dewPoint { data["dewPoint"] = v }
+        if let v = run.steps { data["steps"] = v }
+        if let v = run.uvIndex { data["uvIndex"] = v }
+        if let v = run.aqi { data["aqi"] = v }
+        if let v = run.locationName { data["locationName"] = v }
+        if let v = run.weatherCondition { data["weatherCondition"] = v }
+
+        logger.info("Sync data for run \(run.id): \(data.keys.sorted().joined(separator: ", "))")
 
         return data
     }
@@ -139,7 +155,10 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     func syncNewRun(_ runData: [String: Any]) {
-        guard let session = session else { return }
+        guard let session = session else {
+            logger.error("syncNewRun: WCSession is nil")
+            return
+        }
 
         let message: [String: Any] = [
             "type": SyncMessageType.runAdded.rawValue,
@@ -147,26 +166,35 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         ]
 
         if session.isReachable {
+            logger.info("syncNewRun: sending via sendMessage (reachable)")
             session.sendMessage(message, replyHandler: nil) { error in
-                logger.error("Failed to send run: \(error)")
+                logger.error("Failed to send run via message: \(error), falling back to transferUserInfo")
                 session.transferUserInfo(message)
             }
         } else {
+            logger.info("syncNewRun: sending via transferUserInfo (not reachable)")
             session.transferUserInfo(message)
         }
     }
 
     func requestFullSync() {
-        guard let session = session else { return }
+        guard let session = session else {
+            logger.error("requestFullSync: WCSession is nil")
+            return
+        }
 
         let message = ["type": SyncMessageType.requestFullSync.rawValue]
 
         if session.isReachable {
+            logger.info("requestFullSync: requesting (reachable)")
             session.sendMessage(message, replyHandler: { [weak self] response in
+                logger.info("requestFullSync: received response")
                 self?.handleFullSyncResponse(response)
             }) { error in
                 logger.error("Failed to request full sync: \(error)")
             }
+        } else {
+            logger.info("requestFullSync: skipped (not reachable)")
         }
     }
 
@@ -215,8 +243,10 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
     private func handleReceivedMessage(_ message: [String: Any], replyHandler: (([String: Any]) -> Void)? = nil) {
         guard let typeString = message["type"] as? String,
               let type = SyncMessageType(rawValue: typeString) else {
+            logger.error("handleReceivedMessage: unknown type or missing type field")
             return
         }
+        logger.info("Received sync message: \(typeString)")
 
         Task { @MainActor in
             switch type {
@@ -312,11 +342,14 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         guard let distance = runData["distance"] as? Int,
               let elapsedTime = runData["elapsedTime"] as? Double,
               let dateTimestamp = runData["date"] as? Double else {
+            logger.error("handleRunAdded: missing required fields")
             return
         }
 
         let date = Date(timeIntervalSince1970: dateTimestamp)
         let notes = runData["notes"] as? String ?? ""
+        let syncKeys = runData.keys.sorted().joined(separator: ", ")
+        logger.info("handleRunAdded: \(distance)m, keys: \(syncKeys)")
 
         let dataManager = DataManager.shared
         let context = dataManager.modelContainer.mainContext
@@ -324,20 +357,112 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
 
         do {
             let existingRuns = try context.fetch(descriptor)
-            let runExists = existingRuns.contains { run in
+            let existingRun = existingRuns.first { run in
                 abs(run.date.timeIntervalSince(date)) < 1.0 &&
                 run.distance == distance &&
                 abs(run.elapsedTime - elapsedTime) < 0.001
             }
 
-            if !runExists {
+            let runToEnrich: Run
+            if let existingRun {
+                // Update existing run with any new enriched fields (location, HR, weather)
+                logger.info("handleRunAdded: updating existing run with enriched data")
+                applyOptionalFields(from: runData, to: existingRun)
+                if !notes.isEmpty && existingRun.notes.isEmpty {
+                    existingRun.notes = notes
+                }
+                try context.save()
+                logger.info("handleRunAdded: existing run updated successfully")
+                runToEnrich = existingRun
+            } else {
                 let run = Run(distance: distance, elapsedTime: elapsedTime, notes: notes)
                 run.date = date
                 applyOptionalFields(from: runData, to: run)
 
                 context.insert(run)
                 try context.save()
+                runToEnrich = run
             }
+
+            // iPhone: fetch weather once per location, not per run
+            // Check if any same-day run at this location already has weather
+            #if os(iOS)
+            if runToEnrich.weatherCondition == nil,
+               let lat = runToEnrich.latitude, let lon = runToEnrich.longitude,
+               WeatherService.shared.hasAPIKey {
+                let runDate = Calendar.current.startOfDay(for: runToEnrich.date)
+                let sameDayWithWeather = existingRuns.first { run in
+                    Calendar.current.startOfDay(for: run.date) == runDate &&
+                    run.weatherCondition != nil &&
+                    run.latitude != nil &&
+                    abs(run.latitude! - lat) < 0.01 && abs(run.longitude! - lon) < 0.01
+                }
+
+                if let donor = sameDayWithWeather {
+                    // Copy weather from a nearby run that already has it
+                    logger.info("handleRunAdded: copying weather from nearby run")
+                    runToEnrich.temperature = donor.temperature
+                    runToEnrich.feelsLike = donor.feelsLike
+                    runToEnrich.humidity = donor.humidity
+                    runToEnrich.pressure = donor.pressure
+                    runToEnrich.windSpeed = donor.windSpeed
+                    runToEnrich.windDirection = donor.windDirection
+                    runToEnrich.visibility = donor.visibility
+                    runToEnrich.uvIndex = donor.uvIndex
+                    runToEnrich.dewPoint = donor.dewPoint
+                    runToEnrich.weatherCondition = donor.weatherCondition
+                    runToEnrich.aqi = donor.aqi
+                    try? context.save()
+                } else {
+                    // Fetch weather from API (first run at this location today)
+                    Task {
+                        let location = CLLocation(latitude: lat, longitude: lon)
+                        if let weather = await WeatherService.shared.fetchWeather(for: location) {
+                            await MainActor.run {
+                                // Apply weather to THIS run and all same-day runs at this location
+                                let allRuns = (try? context.fetch(FetchDescriptor<Run>())) ?? []
+                                let sameLocationRuns = allRuns.filter { run in
+                                    Calendar.current.startOfDay(for: run.date) == runDate &&
+                                    run.weatherCondition == nil &&
+                                    run.latitude != nil &&
+                                    abs(run.latitude! - lat) < 0.01 && abs(run.longitude! - lon) < 0.01
+                                }
+                                for run in sameLocationRuns {
+                                    run.temperature = weather.temperature
+                                    run.feelsLike = weather.feelsLike
+                                    run.humidity = weather.humidity
+                                    run.pressure = weather.pressure
+                                    run.windSpeed = weather.windSpeed
+                                    run.windDirection = weather.windDirection
+                                    run.visibility = weather.visibility
+                                    run.uvIndex = weather.uvIndex
+                                    run.dewPoint = weather.dewPoint
+                                    run.weatherCondition = weather.weatherCondition
+                                }
+                                try? context.save()
+                                logger.info("handleRunAdded: weather saved for \(sameLocationRuns.count) runs")
+                            }
+                        }
+                        if let aqi = await WeatherService.shared.fetchAQI(for: location) {
+                            await MainActor.run {
+                                let allRuns = (try? context.fetch(FetchDescriptor<Run>())) ?? []
+                                let sameLocationRuns = allRuns.filter { run in
+                                    Calendar.current.startOfDay(for: run.date) == runDate &&
+                                    run.aqi == nil &&
+                                    run.latitude != nil &&
+                                    abs(run.latitude! - lat) < 0.01 && abs(run.longitude! - lon) < 0.01
+                                }
+                                for run in sameLocationRuns {
+                                    run.aqi = aqi.aqi
+                                }
+                                try? context.save()
+                                logger.info("handleRunAdded: AQI saved for \(sameLocationRuns.count) runs")
+                            }
+                        }
+                    }
+                }
+            }
+            #endif
         } catch {
             logger.error("Failed to check/add run: \(error)")
         }

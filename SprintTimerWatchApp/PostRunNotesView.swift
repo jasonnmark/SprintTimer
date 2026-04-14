@@ -8,45 +8,43 @@ struct PostRunNotesView: View {
     var body: some View {
         VStack(spacing: 6) {
 #if os(watchOS)
-            VStack(spacing: 0) {
-                HStack(spacing: 12) {
-                    Button("Skip") { dismiss() }
-                        .buttonStyle(.bordered)
-                        .tint(.gray)
-                        .font(.body)
+            ScrollView {
+                VStack(spacing: 12) {
+                    HStack(spacing: 12) {
+                        Button("Skip") { dismiss() }
+                            .buttonStyle(.bordered)
+                            .tint(.gray)
+                            .font(.body)
 
-                    Button("Save") {
-                        if !noteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            run.notes = noteText
-                            try? DataManager.shared.modelContainer.mainContext.save()
+                        Button("Save") {
+                            if !noteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                run.notes = noteText
+                                try? DataManager.shared.modelContainer.mainContext.save()
+                            }
+                            dismiss()
                         }
-                        dismiss()
+                        .buttonStyle(.borderedProminent)
+                        .tint(.green)
+                        .font(.body)
+                        .disabled(noteText.isEmpty)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.green)
-                    .font(.body)
-                    .disabled(noteText.isEmpty)
-                }
-                .padding(.horizontal)
 
-                ScrollView {
-                    Text(noteText.isEmpty ? "Tap mic to dictate" : noteText)
-                        .font(.system(size: 32, weight: .medium))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal)
-                        .foregroundColor(noteText.isEmpty ? .gray : .primary)
-                }
+                    TextFieldLink(prompt: Text("Speak your note...")) {
+                        Label("Dictate", systemImage: "mic.fill")
+                            .font(.title3)
+                            .frame(maxWidth: .infinity)
+                    } onSubmit: { result in
+                        noteText = result
+                    }
 
-                TextFieldLink(prompt: Text("Speak your note...")) {
-                    Label("Dictate", systemImage: "mic.fill")
-                        .font(.title3)
-                        .frame(maxWidth: .infinity)
-                } onSubmit: { result in
-                    noteText = result
+                    if !noteText.isEmpty {
+                        Text(noteText)
+                            .font(.system(size: 32, weight: .medium))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
                 .padding(.horizontal)
             }
-            .ignoresSafeArea(edges: .bottom)
 #else
             Text("Add Notes?")
                 .font(.system(size: 16, weight: .bold))

@@ -38,14 +38,24 @@ struct iOSHistoryView: View {
             Calendar.current.startOfDay(for: run.date)
         }
         return grouped.map { (date, runs) in
+            // For runs missing a location, use the nearest known location from the same day
+            // (they were likely at the same place)
+            let knownLocations = runs.compactMap { $0.locationName }.filter { !$0.isEmpty }
             let locationGrouped = Dictionary(grouping: runs) { run in
-                run.locationName ?? "Unknown Location"
+                run.locationName ?? nearestLocation(for: run, from: runs) ?? knownLocations.first ?? "Unknown Location"
             }
-            let sortedLocations = locationGrouped.map { (location: $0.key, runs: $0.value.sorted { $0.date < $1.date }) }
-                .sorted { ($0.runs.first?.date ?? .distantPast) < ($1.runs.first?.date ?? .distantPast) }
+            let sortedLocations = locationGrouped.map { (location: $0.key, runs: $0.value.sorted { $0.date > $1.date }) }
+                .sorted { ($0.runs.first?.date ?? .distantPast) > ($1.runs.first?.date ?? .distantPast) }
             return (date: date, locationGroups: sortedLocations)
         }
         .sorted { $0.date > $1.date }
+    }
+
+    // Find the closest run (by time) that has a location name
+    private func nearestLocation(for run: Run, from runs: [Run]) -> String? {
+        runs.filter { $0.locationName != nil && !$0.locationName!.isEmpty }
+            .min(by: { abs($0.date.timeIntervalSince(run.date)) < abs($1.date.timeIntervalSince(run.date)) })?
+            .locationName
     }
 
     // Total run count for a day
@@ -169,6 +179,8 @@ struct iOSHistoryView: View {
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .active {
                 lastRefresh = Date()
+                // Request fresh data from Watch when app comes to foreground
+                SyncManager.shared.requestFullSync()
             }
         }
     }
@@ -462,7 +474,7 @@ struct RunRowView: View {
                                 .foregroundColor(.blue)
                         }
                         
-                        if run.averageHeartRate != nil || run.maxHeartRate != nil {
+                        if run.averageHeartRate != nil || run.maxHeartRate != nil || run.startHeartRate != nil || run.endHeartRate != nil {
                             HStack(spacing: 2) {
                                 Image(systemName: "heart.fill")
                                     .font(.caption)
@@ -471,11 +483,19 @@ struct RunRowView: View {
                                     Text("\(Int(avg))")
                                         .font(.caption)
                                         .foregroundColor(.red)
-                                }
-                                if let max = run.maxHeartRate {
-                                    Text("/ \(Int(max))")
+                                    if let max = run.maxHeartRate {
+                                        Text("/ \(Int(max))")
+                                            .font(.caption)
+                                            .foregroundColor(.red.opacity(0.7))
+                                    }
+                                } else if let end = run.endHeartRate {
+                                    Text("\(Int(end))")
                                         .font(.caption)
-                                        .foregroundColor(.red.opacity(0.7))
+                                        .foregroundColor(.red)
+                                } else if let start = run.startHeartRate {
+                                    Text("\(Int(start))")
+                                        .font(.caption)
+                                        .foregroundColor(.red)
                                 }
                             }
                         }
@@ -488,11 +508,6 @@ struct RunRowView: View {
                             Label(String(format: "%.1fm", stride), systemImage: "ruler")
                                 .font(.caption)
                                 .foregroundColor(.purple)
-                        }
-                        if let altGain = run.altitudeGain, altGain > 0 {
-                            Label(String(format: "+%.0fft", altGain * 3.28084), systemImage: "arrow.up.right")
-                                .font(.caption)
-                                .foregroundColor(.brown)
                         }
                     }
                 }

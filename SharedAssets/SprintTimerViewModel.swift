@@ -73,6 +73,11 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     }
 
     func startRun() {
+        // Start location tracking early so GPS has time to get a fix before the sprint ends
+        if dataManager.useGPS {
+            locationManager.startUpdatingLocation()
+        }
+
         switch dataManager.startMode {
         case .countdown:
             startCountdown()
@@ -251,32 +256,6 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         // Check if it's an outlier before saving
         let outlierCheck = isRunOutlier(modelContext: modelContext)
 
-        // Fetch HealthKit metrics at stop
-        if dataManager.useHealthKit, let start = startTime {
-            let end = Date()
-            fetchLatestHeartRate { [weak self] hr in
-                Task { @MainActor in
-                    self?.endHeartRate = hr
-                }
-            }
-            fetchHeartRateStats(from: start, to: end) { [weak self] avg, max in
-                Task { @MainActor in
-                    self?.averageHeartRate = avg
-                    self?.maxHeartRate = max
-                }
-            }
-            fetchSteps(from: start, to: end) { [weak self] count in
-                Task { @MainActor in
-                    self?.steps = count
-                    if let steps = count, steps > 0 {
-                        self?.strideLength = Double(self?.selectedDistance ?? 0) / Double(steps)
-                    } else {
-                        self?.strideLength = nil
-                    }
-                }
-            }
-        }
-
         return outlierCheck
     }
 
@@ -339,11 +318,6 @@ class SprintTimerViewModel: NSObject, ObservableObject {
                     self?.startHeartRate = hr
                 }
             }
-        }
-
-        // Start location tracking if enabled
-        if dataManager.useGPS {
-            locationManager.startUpdatingLocation()
         }
 
         timer = Timer.scheduledTimer(withTimeInterval: 0.001, repeats: true) { [weak self] _ in
@@ -486,19 +460,52 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             run.altitudeGain = altitudeGain
         }
 
-        // Add health data if available
+        // startHeartRate is fetched early in beginTiming(), so it's usually ready
         run.startHeartRate = startHeartRate
-        run.endHeartRate = endHeartRate
-        run.averageHeartRate = averageHeartRate
-        run.maxHeartRate = maxHeartRate
-        run.steps = steps
-        run.strideLength = strideLength
 
         // Use DataManager to save (before async work so the run is persisted)
         dataManager.saveRun(run)
 
         // Capture run ID for async work (avoids capturing non-Sendable Run across isolation boundaries)
         let runId = run.id
+
+        // Fetch HealthKit data asynchronously and write in one batch
+        if dataManager.useHealthKit, let start = startTime {
+            let end = Date()
+            let distance = self.selectedDistance
+            // Expand time window: HR sensor may report samples slightly after the sprint ends,
+            // and for very short sprints we need a wider window to catch any samples
+            let hrStart = start.addingTimeInterval(-30) // 30s before sprint
+            let hrEnd = end.addingTimeInterval(30) // 30s after sprint
+            Task { @MainActor in
+                let hr: Double? = await withCheckedContinuation { cont in
+                    self.fetchLatestHeartRate { cont.resume(returning: $0) }
+                }
+                let (avg, max): (Double?, Double?) = await withCheckedContinuation { cont in
+                    self.fetchHeartRateStats(from: hrStart, to: hrEnd) { avg, max in
+                        cont.resume(returning: (avg, max))
+                    }
+                }
+                let stepCount: Int? = await withCheckedContinuation { cont in
+                    self.fetchSteps(from: start, to: end) { cont.resume(returning: $0) }
+                }
+
+                logger.info("HealthKit backfill: endHR=\(hr?.description ?? "nil"), avgHR=\(avg?.description ?? "nil"), maxHR=\(max?.description ?? "nil"), steps=\(stepCount?.description ?? "nil")")
+
+                // Single DB write with only non-nil values
+                await self.updateRun(id: runId) { run in
+                    if let hr { run.endHeartRate = hr }
+                    if let avg { run.averageHeartRate = avg }
+                    if let max { run.maxHeartRate = max }
+                    if let stepCount {
+                        run.steps = stepCount
+                        if stepCount > 0 {
+                            run.strideLength = Double(distance) / Double(stepCount)
+                        }
+                    }
+                }
+            }
+        }
 
         // Reverse geocode location name asynchronously
         if let location = currentLocation {
@@ -509,34 +516,6 @@ class SprintTimerViewModel: NSObject, ObservableObject {
                 }
             }
         }
-
-        // Fetch weather data asynchronously if enabled and location available (iOS only)
-        #if os(iOS)
-        if dataManager.trackWeather, let location = currentLocation {
-            Task {
-                async let weatherResult = WeatherService.shared.fetchWeather(for: location)
-                async let aqiResult = WeatherService.shared.fetchAQI(for: location)
-
-                if let weather = await weatherResult {
-                    await updateRun(id: runId) { run in
-                        run.temperature = weather.temperature
-                        run.feelsLike = weather.feelsLike
-                        run.humidity = weather.humidity
-                        run.pressure = weather.pressure
-                        run.windSpeed = weather.windSpeed
-                        run.windDirection = weather.windDirection
-                        run.visibility = weather.visibility
-                        run.uvIndex = weather.uvIndex
-                        run.dewPoint = weather.dewPoint
-                        run.weatherCondition = weather.weatherCondition
-                    }
-                }
-                if let aqi = await aqiResult {
-                    await updateRun(id: runId) { $0.aqi = aqi.aqi }
-                }
-            }
-        }
-        #endif
 
         // Stop location updates
         if dataManager.useGPS {
@@ -585,12 +564,20 @@ extension SprintTimerViewModel {
     @MainActor
     private func updateRun(id: UUID, apply: (Run) -> Void) async {
         let context = DataManager.shared.modelContainer.mainContext
-        let descriptor = FetchDescriptor<Run>()
+        var descriptor = FetchDescriptor<Run>(predicate: #Predicate { $0.id == id })
+        descriptor.fetchLimit = 1
         do {
             let runs = try context.fetch(descriptor)
-            if let run = runs.first(where: { $0.id == id }) {
+            if let run = runs.first {
                 apply(run)
                 try context.save()
+                logger.info("Updated run \(id) successfully")
+
+                // Re-sync enriched data to the other device
+                let syncData = SyncManager.shared.runToSyncData(run)
+                SyncManager.shared.syncNewRun(syncData)
+            } else {
+                logger.error("Run \(id) not found for update")
             }
         } catch {
             logger.error("Failed to update run \(id): \(error)")
@@ -603,16 +590,38 @@ import MapKit
 
 extension SprintTimerViewModel {
     private func reverseGeocode(location: CLLocation) async -> String? {
-        guard let request = MKReverseGeocodingRequest(location: location) else { return nil }
+        logger.info("Reverse geocoding for: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+
+        guard let request = MKReverseGeocodingRequest(location: location) else {
+            logger.error("MKReverseGeocodingRequest init returned nil")
+            return nil
+        }
         do {
             let mapItems = try await request.mapItems
-            if let address = mapItems.first?.address {
-                let name = address.shortAddress ?? address.fullAddress
-                return name.isEmpty ? nil : name
+            logger.info("Geocoding returned \(mapItems.count) items")
+            if let item = mapItems.first {
+                // Try the structured address first
+                if let address = item.address {
+                    let name = address.shortAddress ?? address.fullAddress
+                    logger.info("Address result: short=\(address.shortAddress ?? "nil"), full=\(address.fullAddress)")
+                    if !name.isEmpty {
+                        return name
+                    }
+                }
+                // Fall back to addressRepresentations if address is nil
+                if let reps = item.addressRepresentations {
+                    if let cityCtx = reps.cityWithContext {
+                        logger.info("AddressRepresentations fallback: \(cityCtx)")
+                        return cityCtx
+                    } else if let city = reps.cityName {
+                        return city
+                    }
+                }
             }
         } catch {
             logger.error("Reverse geocoding failed: \(error)")
         }
+        logger.error("Reverse geocoding returned no usable result")
         return nil
     }
 }
@@ -624,6 +633,24 @@ extension SprintTimerViewModel: CLLocationManagerDelegate {
             currentLocation = locations.last
             if isRunning {
                 routeLocations.append(contentsOf: locations)
+            }
+        }
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            logger.error("Location manager failed: \(error)")
+        }
+    }
+
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task { @MainActor in
+            let status = manager.authorizationStatus
+            logger.info("Location authorization changed: \(status.rawValue)")
+            if status == .authorizedWhenInUse || status == .authorizedAlways {
+                if dataManager.useGPS {
+                    manager.startUpdatingLocation()
+                }
             }
         }
     }
@@ -658,7 +685,10 @@ extension SprintTimerViewModel {
         }
         let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
-        let query = HKSampleQuery(sampleType: hrType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+        let query = HKSampleQuery(sampleType: hrType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, error in
+            if let error {
+                logger.error("HR stats query error: \(error)")
+            }
             guard let hrSamples = samples as? [HKQuantitySample], !hrSamples.isEmpty else {
                 completion(nil, nil)
                 return
@@ -679,7 +709,10 @@ extension SprintTimerViewModel {
             return
         }
         let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
-        let query = HKStatisticsQuery(quantityType: stepType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, statistics, _ in
+        let query = HKStatisticsQuery(quantityType: stepType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, statistics, error in
+            if let error {
+                logger.error("Steps query error: \(error)")
+            }
             if let sum = statistics?.sumQuantity() {
                 let steps = Int(sum.doubleValue(for: HKUnit.count()))
                 completion(steps)

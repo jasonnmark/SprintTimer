@@ -1,6 +1,9 @@
 import Foundation
 import CoreLocation
 import Security
+import os
+
+private let logger = Logger(subsystem: "com.JasonMark.SprintTimer", category: "WeatherService")
 
 struct WeatherData {
     let temperature: Double       // Celsius
@@ -70,42 +73,51 @@ class WeatherService {
     // MARK: - API
 
     func fetchWeather(for location: CLLocation) async -> WeatherData? {
-        guard hasAPIKey else { return nil }
+        guard hasAPIKey else {
+            logger.error("Weather fetch skipped: no API key configured")
+            return nil
+        }
 
         let lat = location.coordinate.latitude
         let lon = location.coordinate.longitude
-        let urlString = "https://api.openweathermap.org/data/3.0/onecall?lat=\(lat)&lon=\(lon)&units=metric&exclude=minutely,hourly,daily,alerts&appid=\(apiKey)"
+        // Use free 2.5 API (One Call 3.0 requires paid subscription)
+        let urlString = "https://api.openweathermap.org/data/2.5/weather?lat=\(lat)&lon=\(lon)&units=metric&appid=\(apiKey)"
+        logger.info("Fetching weather for \(lat), \(lon)")
 
         guard let url = URL(string: urlString) else { return nil }
 
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            guard let httpResponse = response as? HTTPURLResponse else { return nil }
+            guard httpResponse.statusCode == 200 else {
+                let body = String(data: data, encoding: .utf8) ?? "no body"
+                logger.error("Weather API returned \(httpResponse.statusCode): \(body)")
                 return nil
             }
 
             guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let current = json["current"] as? [String: Any] else {
+                  let main = json["main"] as? [String: Any] else {
                 return nil
             }
 
-            let temp = current["temp"] as? Double ?? 0
-            let feelsLike = current["feels_like"] as? Double ?? 0
-            let humidity = current["humidity"] as? Double ?? 0
-            let pressure = current["pressure"] as? Double ?? 0
-            let windSpeed = current["wind_speed"] as? Double ?? 0
-            let windDir = current["wind_deg"] as? Double ?? 0
-            let visibility = current["visibility"] as? Double ?? 0
-            let uvi = current["uvi"] as? Double ?? 0
-            let dewPoint = current["dew_point"] as? Double ?? 0
+            let temp = main["temp"] as? Double ?? 0
+            let feelsLike = main["feels_like"] as? Double ?? 0
+            let humidity = main["humidity"] as? Double ?? 0
+            let pressure = main["pressure"] as? Double ?? 0
+
+            let windSpeed = (json["wind"] as? [String: Any])?["speed"] as? Double ?? 0
+            let windDir = (json["wind"] as? [String: Any])?["deg"] as? Double ?? 0
+            let visibility = json["visibility"] as? Double ?? 0
 
             var condition = "Unknown"
-            if let weatherArray = current["weather"] as? [[String: Any]],
+            if let weatherArray = json["weather"] as? [[String: Any]],
                let first = weatherArray.first,
-               let main = first["main"] as? String {
-                condition = main
+               let mainCondition = first["main"] as? String {
+                condition = mainCondition
             }
 
+            // Free API doesn't include UV index or dew point
+            logger.info("Weather fetched: \(condition) \(temp)°C, humidity \(humidity)%")
             return WeatherData(
                 temperature: temp,
                 feelsLike: feelsLike,
@@ -114,11 +126,12 @@ class WeatherService {
                 windSpeed: windSpeed,
                 windDirection: windDir,
                 visibility: visibility,
-                uvIndex: Int(uvi),
-                dewPoint: dewPoint,
+                uvIndex: 0,
+                dewPoint: 0,
                 weatherCondition: condition
             )
         } catch {
+            logger.error("Weather fetch failed: \(error)")
             return nil
         }
     }
@@ -134,7 +147,10 @@ class WeatherService {
 
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            guard let httpResponse = response as? HTTPURLResponse else { return nil }
+            guard httpResponse.statusCode == 200 else {
+                let body = String(data: data, encoding: .utf8) ?? "no body"
+                logger.error("AQI API returned \(httpResponse.statusCode): \(body)")
                 return nil
             }
 
@@ -143,11 +159,14 @@ class WeatherService {
                   let first = list.first,
                   let main = first["main"] as? [String: Any],
                   let aqi = main["aqi"] as? Int else {
+                logger.error("AQI response parse failed")
                 return nil
             }
 
+            logger.info("AQI fetched: \(aqi)")
             return AQIData(aqi: aqi)
         } catch {
+            logger.error("AQI fetch failed: \(error)")
             return nil
         }
     }

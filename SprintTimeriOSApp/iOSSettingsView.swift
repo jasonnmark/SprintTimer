@@ -85,21 +85,16 @@ struct iOSSettingsView: View {
                         }
 
                     if WeatherService.shared.hasAPIKey {
-                        Toggle("Track Weather", isOn: $dataManager.trackWeather)
-                            .onChange(of: dataManager.trackWeather) { _, _ in Task { await updateDebugInfo() } }
-
-                        if dataManager.trackWeather {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Label("Temperature & Feels Like", systemImage: "thermometer")
-                                Label("Humidity & Pressure", systemImage: "cloud")
-                                Label("Wind Speed & Direction", systemImage: "wind")
-                                Label("UV Index", systemImage: "sun.max")
-                                Label("Air Quality (AQI)", systemImage: "aqi.medium")
-                                Label("Weather Condition", systemImage: "cloud.sun")
-                            }
-                            .font(.caption)
-                            .foregroundColor(.gray)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Temperature & Feels Like", systemImage: "thermometer")
+                            Label("Humidity & Pressure", systemImage: "cloud")
+                            Label("Wind Speed & Direction", systemImage: "wind")
+                            Label("UV Index", systemImage: "sun.max")
+                            Label("Air Quality (AQI)", systemImage: "aqi.medium")
+                            Label("Weather Condition", systemImage: "cloud.sun")
                         }
+                        .font(.caption)
+                        .foregroundColor(.gray)
                     } else {
                         Text("Enter your OpenWeather API key to enable weather tracking. Sign up at openweathermap.org (free tier).")
                             .font(.caption)

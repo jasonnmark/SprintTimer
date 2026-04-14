@@ -11,42 +11,40 @@ struct DayNotesView: View {
         NavigationStack {
             VStack(spacing: 8) {
 #if os(watchOS)
-                VStack(spacing: 0) {
-                    HStack(spacing: 12) {
-                        Button(action: { dismiss() }) {
-                            Text("Cancel")
-                                .font(.system(size: 16))
-                                .frame(maxWidth: .infinity)
+                ScrollView {
+                    VStack(spacing: 12) {
+                        HStack(spacing: 12) {
+                            Button(action: { dismiss() }) {
+                                Text("Cancel")
+                                    .font(.system(size: 16))
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button(action: { saveDayNotes() }) {
+                                Text("Save")
+                                    .font(.system(size: 16))
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
                         }
-                        .buttonStyle(.bordered)
 
-                        Button(action: { saveDayNotes() }) {
-                            Text("Save")
-                                .font(.system(size: 16))
+                        TextFieldLink(prompt: Text("Speak your day notes...")) {
+                            Label("Dictate", systemImage: "mic.fill")
+                                .font(.title3)
                                 .frame(maxWidth: .infinity)
+                        } onSubmit: { result in
+                            noteText = result
                         }
-                        .buttonStyle(.borderedProminent)
-                    }
-                    .padding(.horizontal)
 
-                    ScrollView {
-                        Text(noteText.isEmpty ? "Tap mic to dictate" : noteText)
-                            .font(.system(size: 32, weight: .medium))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal)
-                            .foregroundColor(noteText.isEmpty ? .gray : .primary)
-                    }
-
-                    TextFieldLink(prompt: Text("Speak your day notes...")) {
-                        Label("Dictate", systemImage: "mic.fill")
-                            .font(.title3)
-                            .frame(maxWidth: .infinity)
-                    } onSubmit: { result in
-                        noteText = result
+                        if !noteText.isEmpty {
+                            Text(noteText)
+                                .font(.system(size: 32, weight: .medium))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
                     .padding(.horizontal)
                 }
-                .ignoresSafeArea(edges: .bottom)
 #else
                 Text("Day Notes")
                     .font(.system(size: 14, weight: .bold))
