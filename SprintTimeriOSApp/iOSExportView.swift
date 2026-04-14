@@ -199,111 +199,156 @@ struct iOSExportView: View {
         }
     }
     
+    private func optionalDouble(_ val: Double?) -> String {
+        guard let v = val else { return "" }
+        return String(format: "%.1f", v)
+    }
+
+    private func optionalInt(_ val: Double?) -> String {
+        guard let v = val else { return "" }
+        return "\(Int(v))"
+    }
+
+    private func compassDirection(from degrees: Double) -> String {
+        let dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"]
+        let index = Int((degrees + 11.25).truncatingRemainder(dividingBy: 360) / 22.5)
+        return dirs[index % 16]
+    }
+
     private func createExcelFile(from runsData: [RunData]) -> URL {
-        // For now, create an enhanced CSV that Excel can open
-        // Note: For true .xlsx support, you'd need a library like XLSXWriter
-        
-        var csvString = "Date,Time,Day of Week,Distance (m),Elapsed Time (s),Formatted Time,Pace (m/s)"
-        
+        // Column order:
+        // Core: Date, Time of Day, Day, Distance, Elapsed (s), Time (formatted), Avg Speed (m/s)
+        // Notes: Run Notes, Day Notes
+        // Health: Start HR, End HR, Avg HR, Max HR, Steps, Stride Length (race)
+        // GPS: Latitude, Longitude, Location, Altitude, Alt Gain, GPS Distance, GPS Avg Speed, GPS Stride Length
+        // Weather: Condition, Temp, Feels Like, Humidity, Pressure, Wind Speed, Wind Dir (°), Wind Dir, Visibility, UV, Dew Point, AQI
+
+        var csvString = "Date,Time of Day,Day of Week,Distance (m),Elapsed Time (s),Avg Speed (m/s)"
+
         if includeNotes {
             csvString += ",Run Notes,Day Notes"
         }
-        
-        if includeLocationData {
+
+        if includeHealthData {
+            csvString += ",Start HR,End HR,Avg HR,Max HR,Steps,Stride Length (m)"
+        }
+
+        if includeGPSData {
+            csvString += ",Latitude,Longitude"
+            if includeLocationData {
+                csvString += ",Location"
+            }
+            csvString += ",Altitude (m),Altitude Gain (m),GPS Distance (m),GPS Avg Speed (m/s),GPS Stride Length (m)"
+        } else if includeLocationData {
             csvString += ",Location"
         }
-        
-        if includeGPSData {
-            csvString += ",GPS Distance (m),Average Speed (m/s),Latitude,Longitude,Altitude (m),Altitude Gain (m)"
-        }
-        
-        if includeHealthData {
-            csvString += ",Start Heart Rate,End Heart Rate,Average Heart Rate,Max Heart Rate,Steps,Stride Length (m)"
-        }
-        
+
         if includeWeatherData {
-            csvString += ",Temperature (°C),Feels Like (°C),Humidity (%),Pressure (hPa),Wind Speed (m/s),Wind Direction (°),Visibility (m),UV Index,Dew Point (°C),Condition,AQI"
+            csvString += ",Condition,Temperature (°C),Feels Like (°C),Humidity (%),Pressure (hPa),Wind Speed (m/s),Wind Direction (°),Wind Direction,Visibility (m),UV Index,Dew Point (°C),AQI"
         }
-        
+
         csvString += "\n"
-        
+
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .short
-        dateFormatter.timeStyle = .short
-        
+
+        let timeFormatter = DateFormatter()
+        timeFormatter.timeStyle = .short
+
         let dayFormatter = DateFormatter()
         dayFormatter.dateFormat = "EEEE"
-        
+
         for run in runsData {
-            // Basic data
+            // Avg speed based on race distance (not GPS)
+            let avgSpeed = run.elapsedTime > 0 ? Double(run.distance) / run.elapsedTime : 0
+
+            // Core data
             csvString += "\"\(dateFormatter.string(from: run.date))\","
-            let timeFormatter = DateFormatter()
-            timeFormatter.timeStyle = .short
             csvString += "\"\(timeFormatter.string(from: run.date))\","
             csvString += "\"\(dayFormatter.string(from: run.date))\","
             csvString += "\(run.distance),"
             csvString += "\(String(format: "%.3f", run.elapsedTime)),"
-            csvString += "\"\(run.formattedTime)\","
-            csvString += "\"\(run.pace)\""
-            
+            csvString += "\(String(format: "%.2f", avgSpeed))"
+
             if includeNotes {
                 let escapedNotes = run.notes.replacingOccurrences(of: "\"", with: "\"\"")
                 csvString += ",\"\(escapedNotes)\""
-                
-                // Add day notes
                 let escapedDayNotes = run.dayNote.replacingOccurrences(of: "\"", with: "\"\"")
                 csvString += ",\"\(escapedDayNotes)\""
             }
-            
-            if includeLocationData {
-                let locationName = run.locationName ?? ""
-                csvString += ",\"\(locationName)\""
-            }
-            
-            if includeGPSData {
-                csvString += ",\(run.actualDistance ?? 0)"
-                csvString += ",\(String(format: "%.2f", run.averageSpeed ?? 0))"
-                csvString += ",\(String(format: "%.6f", run.latitude ?? 0))"
-                csvString += ",\(String(format: "%.6f", run.longitude ?? 0))"
-                csvString += ",\(String(format: "%.1f", run.altitude ?? 0))"
-                csvString += ",\(String(format: "%.1f", run.altitudeGain ?? 0))"
-            }
-            
+
             if includeHealthData {
-                csvString += ",\(Int(run.startHeartRate ?? 0))"
-                csvString += ",\(Int(run.endHeartRate ?? 0))"
-                csvString += ",\(Int(run.averageHeartRate ?? 0))"
-                csvString += ",\(Int(run.maxHeartRate ?? 0))"
-                csvString += ",\(run.steps ?? 0)"
-                csvString += ",\(String(format: "%.2f", run.strideLength ?? 0))"
+                csvString += ",\(optionalInt(run.startHeartRate))"
+                csvString += ",\(optionalInt(run.endHeartRate))"
+                csvString += ",\(optionalInt(run.averageHeartRate))"
+                csvString += ",\(optionalInt(run.maxHeartRate))"
+                csvString += ",\(run.steps.map { "\($0)" } ?? "")"
+                // Stride length based on race distance
+                let raceStride: String
+                if let steps = run.steps, steps > 0 {
+                    raceStride = String(format: "%.2f", Double(run.distance) / Double(steps))
+                } else {
+                    raceStride = ""
+                }
+                csvString += ",\(raceStride)"
             }
-            
+
+            if includeGPSData {
+                csvString += ",\(run.latitude.map { String(format: "%.6f", $0) } ?? "")"
+                csvString += ",\(run.longitude.map { String(format: "%.6f", $0) } ?? "")"
+                if includeLocationData {
+                    csvString += ",\"\(run.locationName ?? "")\""
+                }
+                csvString += ",\(run.altitude.map { String(format: "%.1f", $0) } ?? "")"
+                csvString += ",\(run.altitudeGain.map { String(format: "%.1f", $0) } ?? "")"
+                csvString += ",\(run.actualDistance.map { String(format: "%.1f", $0) } ?? "")"
+                // GPS avg speed
+                let gpsAvgSpeed: String
+                if let dist = run.actualDistance, run.elapsedTime > 0 {
+                    gpsAvgSpeed = String(format: "%.2f", dist / run.elapsedTime)
+                } else {
+                    gpsAvgSpeed = ""
+                }
+                csvString += ",\(gpsAvgSpeed)"
+                // GPS stride length
+                let gpsStride: String
+                if let dist = run.actualDistance, let steps = run.steps, steps > 0 {
+                    gpsStride = String(format: "%.2f", dist / Double(steps))
+                } else {
+                    gpsStride = ""
+                }
+                csvString += ",\(gpsStride)"
+            } else if includeLocationData {
+                csvString += ",\"\(run.locationName ?? "")\""
+            }
+
             if includeWeatherData {
-                csvString += ",\(String(format: "%.1f", run.temperature ?? 0))"
-                csvString += ",\(String(format: "%.1f", run.feelsLike ?? 0))"
-                csvString += ",\(Int(run.humidity ?? 0))"
-                csvString += ",\(Int(run.pressure ?? 0))"
-                csvString += ",\(String(format: "%.1f", run.windSpeed ?? 0))"
-                csvString += ",\(Int(run.windDirection ?? 0))"
-                csvString += ",\(Int(run.visibility ?? 0))"
-                csvString += ",\(run.uvIndex ?? 0)"
-                csvString += ",\(String(format: "%.1f", run.dewPoint ?? 0))"
                 csvString += ",\"\(run.weatherCondition ?? "")\""
-                csvString += ",\(run.aqi ?? 0)"
+                csvString += ",\(optionalDouble(run.temperature))"
+                csvString += ",\(optionalDouble(run.feelsLike))"
+                csvString += ",\(optionalInt(run.humidity))"
+                csvString += ",\(optionalInt(run.pressure))"
+                csvString += ",\(optionalDouble(run.windSpeed))"
+                csvString += ",\(run.windDirection.map { String(format: "%.0f", $0) } ?? "")"
+                csvString += ",\"\(run.windDirection.map { compassDirection(from: $0) } ?? "")\""
+                csvString += ",\(run.visibility.map { "\(Int($0))" } ?? "")"
+                csvString += ",\(run.uvIndex.map { "\($0)" } ?? "")"
+                csvString += ",\(optionalDouble(run.dewPoint))"
+                csvString += ",\(run.aqi.map { "\($0)" } ?? "")"
             }
-            
+
             csvString += "\n"
         }
-        
+
         let fileName = "SprintTimer_Export_\(Date().timeIntervalSince1970).csv"
         let path = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-        
+
         do {
             try csvString.write(to: path, atomically: true, encoding: .utf8)
         } catch {
             // CSV creation failed
         }
-        
+
         return path
     }
     
@@ -314,79 +359,93 @@ struct iOSExportView: View {
     
     private func createJSONFile(from runsData: [RunData]) -> URL {
         var jsonArray: [[String: Any]] = []
-        
+
         let dateFormatter = ISO8601DateFormatter()
-        
+
         for run in runsData {
+            let avgSpeed = run.elapsedTime > 0 ? Double(run.distance) / run.elapsedTime : 0
+
             var runDict: [String: Any] = [
                 "id": run.id.uuidString,
                 "date": dateFormatter.string(from: run.date),
                 "distance": run.distance,
                 "elapsedTime": run.elapsedTime,
-                "formattedTime": run.formattedTime,
-                "pace": run.pace
+                "avgSpeed": avgSpeed
             ]
-            
+
             if includeNotes && !run.notes.isEmpty {
                 runDict["notes"] = run.notes
                 runDict["dayNotes"] = run.dayNote
             }
-            
-            if includeLocationData, let locationName = run.locationName, !locationName.isEmpty {
-                runDict["locationName"] = locationName
-            }
-            
-            if includeGPSData {
-                var gpsData: [String: Any] = [:]
-                if let actualDistance = run.actualDistance { gpsData["actualDistance"] = actualDistance }
-                if let averageSpeed = run.averageSpeed { gpsData["averageSpeed"] = averageSpeed }
-                if let latitude = run.latitude { gpsData["latitude"] = latitude }
-                if let longitude = run.longitude { gpsData["longitude"] = longitude }
-                if let altitude = run.altitude { gpsData["altitude"] = altitude }
-                if let altitudeGain = run.altitudeGain { gpsData["altitudeGain"] = altitudeGain }
-                if !gpsData.isEmpty { runDict["gpsData"] = gpsData }
-            }
-            
+
             if includeHealthData {
                 var healthData: [String: Any] = [:]
                 if let startHR = run.startHeartRate { healthData["startHeartRate"] = startHR }
                 if let endHR = run.endHeartRate { healthData["endHeartRate"] = endHR }
                 if let avgHR = run.averageHeartRate { healthData["averageHeartRate"] = avgHR }
                 if let maxHR = run.maxHeartRate { healthData["maxHeartRate"] = maxHR }
-                if let steps = run.steps { healthData["steps"] = steps }
-                if let strideLength = run.strideLength { healthData["strideLength"] = strideLength }
+                if let steps = run.steps {
+                    healthData["steps"] = steps
+                    if steps > 0 {
+                        healthData["strideLength"] = Double(run.distance) / Double(steps)
+                    }
+                }
                 if !healthData.isEmpty { runDict["healthData"] = healthData }
             }
-            
+
+            if includeGPSData {
+                var gpsData: [String: Any] = [:]
+                if let latitude = run.latitude { gpsData["latitude"] = latitude }
+                if let longitude = run.longitude { gpsData["longitude"] = longitude }
+                if includeLocationData, let loc = run.locationName, !loc.isEmpty { gpsData["locationName"] = loc }
+                if let altitude = run.altitude { gpsData["altitude"] = altitude }
+                if let altitudeGain = run.altitudeGain { gpsData["altitudeGain"] = altitudeGain }
+                if let actualDistance = run.actualDistance {
+                    gpsData["gpsDistance"] = actualDistance
+                    if run.elapsedTime > 0 {
+                        gpsData["gpsAvgSpeed"] = actualDistance / run.elapsedTime
+                    }
+                    if let steps = run.steps, steps > 0 {
+                        gpsData["gpsStrideLength"] = actualDistance / Double(steps)
+                    }
+                }
+                if !gpsData.isEmpty { runDict["gpsData"] = gpsData }
+            } else if includeLocationData, let loc = run.locationName, !loc.isEmpty {
+                runDict["locationName"] = loc
+            }
+
             if includeWeatherData {
                 var weatherData: [String: Any] = [:]
+                if let condition = run.weatherCondition { weatherData["condition"] = condition }
                 if let temp = run.temperature { weatherData["temperature"] = temp }
                 if let feelsLike = run.feelsLike { weatherData["feelsLike"] = feelsLike }
                 if let humidity = run.humidity { weatherData["humidity"] = humidity }
                 if let pressure = run.pressure { weatherData["pressure"] = pressure }
                 if let windSpeed = run.windSpeed { weatherData["windSpeed"] = windSpeed }
-                if let windDirection = run.windDirection { weatherData["windDirection"] = windDirection }
+                if let windDirection = run.windDirection {
+                    weatherData["windDirectionDegrees"] = windDirection
+                    weatherData["windDirectionCompass"] = compassDirection(from: windDirection)
+                }
                 if let visibility = run.visibility { weatherData["visibility"] = visibility }
                 if let uvIndex = run.uvIndex { weatherData["uvIndex"] = uvIndex }
                 if let dewPoint = run.dewPoint { weatherData["dewPoint"] = dewPoint }
                 if let aqi = run.aqi { weatherData["aqi"] = aqi }
-                if let condition = run.weatherCondition { weatherData["condition"] = condition }
                 if !weatherData.isEmpty { runDict["weatherData"] = weatherData }
             }
-            
+
             jsonArray.append(runDict)
         }
-        
+
         let fileName = "SprintTimer_Export_\(Date().timeIntervalSince1970).json"
         let path = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-        
+
         do {
             let jsonData = try JSONSerialization.data(withJSONObject: jsonArray, options: .prettyPrinted)
             try jsonData.write(to: path)
         } catch {
             // JSON creation failed
         }
-        
+
         return path
     }
 }

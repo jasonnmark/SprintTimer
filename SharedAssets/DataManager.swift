@@ -232,7 +232,8 @@ class DataManager: ObservableObject {
         let modelConfiguration = ModelConfiguration(
             schema: schema,
             url: databaseURL,
-            allowsSave: true
+            allowsSave: true,
+            cloudKitDatabase: .none
         )
 
         do {
@@ -417,6 +418,11 @@ class DataManager: ObservableObject {
 
             // Update complication data
             updateComplicationData(lastRun: run)
+
+            // Schedule cloud backup (iPhone only)
+            #if os(iOS)
+            BackupManager.shared.scheduleBackup()
+            #endif
 
         } catch {
             logger.error("Failed to save run: \(error)")

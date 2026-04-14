@@ -3,9 +3,12 @@ import SwiftData
 
 struct iOSSettingsView: View {
     @StateObject private var dataManager = DataManager.shared
+    @StateObject private var backupManager = BackupManager.shared
     @State private var debugInfo = ""
     @State private var selectedStartModeIndex = 0
     @State private var showingClearAlert = false
+    @State private var showingRestoreSheet = false
+    @State private var availableBackups: [BackupManager.BackupInfo] = []
     @State private var weatherAPIKey = ""
     
     var body: some View {
@@ -149,6 +152,67 @@ struct iOSSettingsView: View {
                     .buttonStyle(.bordered)
                 }
 
+                Section(header: Text("Cloud Backup")) {
+                    HStack {
+                        Text("Last Backup")
+                        Spacer()
+                        if let date = backupManager.lastBackupDate {
+                            Text(date, style: .relative)
+                                .foregroundColor(.secondary)
+                            Text("ago")
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Never")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Button {
+                        Task { await backupManager.performBackup() }
+                    } label: {
+                        HStack {
+                            if backupManager.isBackingUp {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Backing up...")
+                            } else {
+                                Image(systemName: "icloud.and.arrow.up")
+                                Text("Backup Now")
+                            }
+                        }
+                    }
+                    .disabled(backupManager.isBackingUp)
+
+                    Button {
+                        Task {
+                            availableBackups = await backupManager.fetchBackupList()
+                            showingRestoreSheet = true
+                        }
+                    } label: {
+                        HStack {
+                            if backupManager.isRestoring {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Restoring...")
+                            } else {
+                                Image(systemName: "icloud.and.arrow.down")
+                                Text("Restore from Backup")
+                            }
+                        }
+                    }
+                    .disabled(backupManager.isRestoring)
+
+                    if let error = backupManager.backupError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+
+                    Text("Backups are stored in your iCloud account. Daily backups kept for 1 week, weekly for 3 months, monthly forever.")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+
                 Section(header: Text("Beta")) {
                     Toggle("Beta Mode", isOn: $dataManager.betaMode)
 
@@ -207,6 +271,9 @@ struct iOSSettingsView: View {
             }
         } message: {
             Text("This will permanently delete all run history. This action cannot be undone.")
+        }
+        .sheet(isPresented: $showingRestoreSheet) {
+            RestoreBackupView(backups: availableBackups)
         }
     }
     
@@ -335,27 +402,90 @@ struct iOSSettingsView: View {
     @MainActor
     private func clearAllData() async {
         let modelContext = dataManager.modelContainer.mainContext
-        
+
         do {
             // Fetch all runs
             let descriptor = FetchDescriptor<Run>()
             let allRuns = try modelContext.fetch(descriptor)
-            
+
             // Delete each run
             for run in allRuns {
                 modelContext.delete(run)
             }
-            
+
             // Save changes
             try modelContext.save()
-            
+
             // Clear all daily notes
             DailyNotesManager.shared.clearAllNotes()
-            
+
+            // Mark as intentional clear so auto-restore doesn't trigger
+            BackupManager.shared.userClearedData = true
+
             // Refresh the UI
             await updateDebugInfo()
         } catch {
             // Clear data failed
+        }
+    }
+}
+
+struct RestoreBackupView: View {
+    let backups: [BackupManager.BackupInfo]
+    @StateObject private var backupManager = BackupManager.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var restoredSuccessfully = false
+
+    var body: some View {
+        NavigationView {
+            List {
+                if backups.isEmpty {
+                    Text("No backups found in iCloud")
+                        .foregroundColor(.secondary)
+                } else {
+                    ForEach(backups) { backup in
+                        Button {
+                            Task {
+                                let success = await backupManager.restoreFromBackup(id: backup.id)
+                                if success {
+                                    restoredSuccessfully = true
+                                }
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text("\(backup.runCount) runs")
+                                        .font(.headline)
+                                    Spacer()
+                                    Text(backup.deviceName)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Text(backup.date, style: .date)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Text(backup.date, style: .time)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .disabled(backupManager.isRestoring)
+                    }
+                }
+            }
+            .navigationTitle("Restore Backup")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .alert("Restore Complete", isPresented: $restoredSuccessfully) {
+                Button("OK") { dismiss() }
+            } message: {
+                Text("Your data has been restored from the backup.")
+            }
         }
     }
 }

@@ -3,32 +3,26 @@ import SwiftData
 
 struct iOSContentView: View {
     @State private var selectedTab = 0
-    
+
     var body: some View {
         TabView(selection: $selectedTab) {
-            SimpleHomeView()
-                .tabItem {
-                    Label("Home", systemImage: "figure.run")
-                }
-                .tag(0)
-            
             iOSHistoryView()
                 .tabItem {
-                    Label("History", systemImage: "clock.arrow.circlepath")
+                    Label("History", systemImage: "figure.run")
                 }
-                .tag(1)
-            
+                .tag(0)
+
             iOSSettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
-                .tag(2)
-            
+                .tag(1)
+
             iOSExportView()
                 .tabItem {
                     Label("Export", systemImage: "square.and.arrow.up")
                 }
-                .tag(3)
+                .tag(2)
         }
     }
 }

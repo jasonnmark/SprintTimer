@@ -13,7 +13,9 @@ struct iOSHistoryView: View {
     @Environment(\.scenePhase) var scenePhase
     @State private var lastRefresh = Date()
     @State private var selectedDistance: Int = 0 // 0 = All runs
-    
+    @State private var expandedDays = Set<Date>()
+    @State private var hasInitializedExpansion = false
+
     enum NoteType {
         case run, day
     }
@@ -67,7 +69,57 @@ struct iOSHistoryView: View {
     private func allRuns(for day: (date: Date, locationGroups: [(location: String, runs: [Run])])) -> [Run] {
         day.locationGroups.flatMap { $0.runs }
     }
-    
+
+    // MARK: - Stats for filtered distance
+
+    private func formatTime(_ time: TimeInterval) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        let milliseconds = Int((time.truncatingRemainder(dividingBy: 1)) * 1000)
+        if minutes > 0 {
+            return String(format: "%d:%02d.%03d", minutes, seconds, milliseconds)
+        }
+        return String(format: "%d.%03d", seconds, milliseconds)
+    }
+
+    private func averageTime(for runs: [Run]) -> String? {
+        guard !runs.isEmpty else { return nil }
+        let avg = runs.reduce(0) { $0 + $1.elapsedTime } / Double(runs.count)
+        return formatTime(avg)
+    }
+
+    private func runsInWindow(days: Int) -> [Run] {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+        return filteredRuns.filter { $0.date >= cutoff }
+    }
+
+    private var personalBest: Run? {
+        filteredRuns.min(by: { $0.elapsedTime < $1.elapsedTime })
+    }
+
+    private var mostRecentDay: Date? {
+        runsByDay.first?.date
+    }
+
+    private func isDayExpanded(_ date: Date) -> Bool {
+        expandedDays.contains(date)
+    }
+
+    private func toggleDay(_ date: Date) {
+        if expandedDays.contains(date) {
+            expandedDays.remove(date)
+        } else {
+            expandedDays.insert(date)
+        }
+    }
+
+    private func expandMostRecentIfNeeded() {
+        if !hasInitializedExpansion, let most = mostRecentDay {
+            expandedDays.insert(most)
+            hasInitializedExpansion = true
+        }
+    }
+
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
@@ -76,7 +128,7 @@ struct iOSHistoryView: View {
                     Text("Filter:")
                         .font(.subheadline)
                         .foregroundColor(.gray)
-                    
+
                     Picker("Distance", selection: $selectedDistance) {
                         Text("All Runs").tag(0)
                         ForEach(availableDistances, id: \.self) { distance in
@@ -85,14 +137,77 @@ struct iOSHistoryView: View {
                     }
                     .pickerStyle(MenuPickerStyle())
                     .accentColor(.blue)
-                    
+
                     Spacer()
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 8)
                 .background(Color(UIColor.systemGroupedBackground))
-                
+
                 List {
+                    // Stats section
+                    Section {
+                        if selectedDistance == 0 {
+                            // All runs: just show total count
+                            HStack {
+                                Text("\(filteredRuns.count)")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                Text("total runs")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                        } else {
+                            // Specific distance: show count + averages + PB
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack {
+                                    Text("\(filteredRuns.count)")
+                                        .font(.title2)
+                                        .fontWeight(.bold)
+                                    Text("\(selectedDistance)m runs")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                // Averages grid
+                                let week = runsInWindow(days: 7)
+                                let month = runsInWindow(days: 30)
+                                let quarter = runsInWindow(days: 90)
+
+                                LazyVGrid(columns: [
+                                    GridItem(.flexible()),
+                                    GridItem(.flexible()),
+                                    GridItem(.flexible())
+                                ], spacing: 8) {
+                                    StatCell(label: "Week", value: averageTime(for: week), count: week.count)
+                                    StatCell(label: "Month", value: averageTime(for: month), count: month.count)
+                                    StatCell(label: "3 Months", value: averageTime(for: quarter), count: quarter.count)
+                                }
+
+                                // Personal best
+                                if let pb = personalBest {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "trophy.fill")
+                                            .foregroundColor(.yellow)
+                                            .font(.caption)
+                                        Text("PB")
+                                            .font(.caption)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.secondary)
+                                        Text(pb.formattedTime)
+                                            .font(.subheadline)
+                                            .fontWeight(.bold)
+                                            .fontDesign(.monospaced)
+                                        Text(pb.date, style: .date)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Day sections (collapsed by default except most recent)
                     ForEach(runsByDay, id: \.date) { dayData in
                         Section(header: DayHeaderView(
                             date: dayData.date,
@@ -100,6 +215,7 @@ struct iOSHistoryView: View {
                             isSelected: selectedDays.contains(dayData.date),
                             editMode: editMode,
                             hasDayNote: dailyNotesManager.hasNote(for: dayData.date),
+                            isExpanded: isDayExpanded(dayData.date),
                             onToggle: {
                                 toggleDaySelection(dayData.date, runs: allRuns(for: dayData))
                             },
@@ -107,32 +223,37 @@ struct iOSHistoryView: View {
                                 noteType = .day
                                 selectedItem = dayData.date
                                 showingNoteEditor = true
+                            },
+                            onExpandToggle: {
+                                toggleDay(dayData.date)
                             }
                         )) {
-                            ForEach(dayData.locationGroups, id: \.location) { locationGroup in
-                                LocationHeaderView(
-                                    locationName: locationGroup.location,
-                                    runs: locationGroup.runs
-                                )
-                                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
-
-                                ForEach(locationGroup.runs) { run in
-                                    RunRowView(
-                                        run: run,
-                                        isSelected: selectedRuns.contains(run.id),
-                                        editMode: editMode,
-                                        onToggle: {
-                                            toggleRunSelection(run.id)
-                                        },
-                                        onNotesTapped: {
-                                            noteType = .run
-                                            selectedItem = run
-                                            showingNoteEditor = true
-                                        }
+                            if isDayExpanded(dayData.date) {
+                                ForEach(dayData.locationGroups, id: \.location) { locationGroup in
+                                    LocationHeaderView(
+                                        locationName: locationGroup.location,
+                                        runs: locationGroup.runs
                                     )
-                                }
-                                .onDelete { indexSet in
-                                    deleteRuns(at: indexSet, from: locationGroup.runs)
+                                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
+
+                                    ForEach(locationGroup.runs) { run in
+                                        RunRowView(
+                                            run: run,
+                                            isSelected: selectedRuns.contains(run.id),
+                                            editMode: editMode,
+                                            onToggle: {
+                                                toggleRunSelection(run.id)
+                                            },
+                                            onNotesTapped: {
+                                                noteType = .run
+                                                selectedItem = run
+                                                showingNoteEditor = true
+                                            }
+                                        )
+                                    }
+                                    .onDelete { indexSet in
+                                        deleteRuns(at: indexSet, from: locationGroup.runs)
+                                    }
                                 }
                             }
                         }
@@ -140,13 +261,23 @@ struct iOSHistoryView: View {
                 }
                 .listStyle(InsetGroupedListStyle())
                 .refreshable {
-                    // Force UI refresh without creating bindings that cause performance issues
                     await MainActor.run {
                         lastRefresh = Date()
                     }
                 }
             }
-            .navigationTitle("History")
+            .navigationTitle("Sprint Timer")
+            .onAppear {
+                expandMostRecentIfNeeded()
+            }
+            .onChange(of: allRuns.count) { _, _ in
+                expandMostRecentIfNeeded()
+            }
+            .onChange(of: selectedDistance) { _, _ in
+                expandedDays.removeAll()
+                hasInitializedExpansion = false
+                expandMostRecentIfNeeded()
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     EditButton()
@@ -237,11 +368,13 @@ struct DayHeaderView: View {
     let isSelected: Bool
     let editMode: EditMode
     let hasDayNote: Bool
+    let isExpanded: Bool
     let onToggle: () -> Void
     let onNotesTapped: () -> Void
-    
+    let onExpandToggle: () -> Void
+
     @StateObject private var dailyNotesManager = DailyNotesManager.shared
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -252,27 +385,37 @@ struct DayHeaderView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(date, style: .date)
-                        .font(.headline)
-                    Text("\(runCount) runs")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+
+                Button(action: onExpandToggle) {
+                    HStack(spacing: 6) {
+                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .frame(width: 12)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(date, style: .date)
+                                .font(.headline)
+                            Text("\(runCount) \(runCount == 1 ? "run" : "runs")")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                    }
                 }
-                
+                .buttonStyle(PlainButtonStyle())
+
                 Spacer()
-                
+
                 Button(action: onNotesTapped) {
                     Image(systemName: hasDayNote ? "note.text" : "note.text.badge.plus")
-                        .font(.system(size: 20)) // Fixed size for consistency
+                        .font(.system(size: 20))
                         .foregroundColor(hasDayNote ? .blue : .gray)
-                        .frame(width: 30, height: 30) // Fixed frame
+                        .frame(width: 30, height: 30)
                 }
                 .buttonStyle(PlainButtonStyle())
             }
             .padding(.vertical, 4)
-            
+
             // Show day notes if they exist
             if hasDayNote {
                 let dayNoteText = dailyNotesManager.getNote(for: date)
@@ -282,7 +425,7 @@ struct DayHeaderView: View {
                             .font(.caption)
                             .foregroundColor(.blue)
                             .padding(.top, 1)
-                        
+
                         Text(dayNoteText)
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -293,6 +436,34 @@ struct DayHeaderView: View {
                 }
             }
         }
+    }
+}
+
+struct StatCell: View {
+    let label: String
+    let value: String?
+    let count: Int
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            if let value {
+                Text(value)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .fontDesign(.monospaced)
+            } else {
+                Text("--")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            Text("\(count) \(count == 1 ? "run" : "runs")")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

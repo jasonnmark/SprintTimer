@@ -4,6 +4,7 @@ import SwiftData
 @main
 struct SprintTimerApp: App {
     @State private var isReady = false
+    @State private var showRestorePrompt = false
 
     private let dataManager = DataManager.shared
     private let syncManager = SyncManager.shared
@@ -16,8 +17,6 @@ struct SprintTimerApp: App {
                 } else {
                     LaunchLoadingView()
                         .onAppear {
-                            // Give the run loop a tick so the loading view renders
-                            // before SwiftData queries start pulling data
                             DispatchQueue.main.async {
                                 isReady = true
                             }
@@ -25,6 +24,29 @@ struct SprintTimerApp: App {
                 }
             }
             .preferredColorScheme(.dark)
+            .task {
+                // Check for auto-restore on launch (empty database + cloud backup available)
+                if await BackupManager.shared.checkForAutoRestore() {
+                    showRestorePrompt = true
+                }
+                // Daily backup check
+                BackupManager.shared.backupIfNeeded()
+            }
+            .alert("Restore from Backup?", isPresented: $showRestorePrompt) {
+                Button("Restore") {
+                    Task {
+                        let backups = await BackupManager.shared.fetchBackupList()
+                        if let latest = backups.first {
+                            _ = await BackupManager.shared.restoreFromBackup(id: latest.id)
+                        }
+                    }
+                }
+                Button("Start Fresh", role: .cancel) {
+                    BackupManager.shared.userClearedData = true
+                }
+            } message: {
+                Text("A cloud backup was found. Would you like to restore your run history?")
+            }
         }
         .modelContainer(dataManager.modelContainer)
     }
