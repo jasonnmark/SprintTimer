@@ -396,6 +396,7 @@ struct DayHeaderView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(date, style: .date)
                                 .font(.headline)
+                                .foregroundColor(.white)
                             Text("\(runCount) \(runCount == 1 ? "run" : "runs")")
                                 .font(.caption)
                                 .foregroundColor(.gray)
@@ -510,9 +511,6 @@ struct LocationHeaderView: View {
         VStack(alignment: .leading, spacing: 4) {
             // Location name
             HStack(spacing: 4) {
-                Image(systemName: "mappin.circle.fill")
-                    .foregroundColor(.orange)
-                    .font(.caption)
                 Text(locationName)
                     .font(.subheadline)
                     .fontWeight(.medium)

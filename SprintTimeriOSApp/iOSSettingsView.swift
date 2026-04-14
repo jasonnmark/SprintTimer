@@ -99,9 +99,17 @@ struct iOSSettingsView: View {
                         .font(.caption)
                         .foregroundColor(.gray)
                     } else {
-                        Text("Enter your OpenWeather API key to enable weather tracking. Sign up at openweathermap.org (free tier).")
+                        Text("Enter your OpenWeather API key to enable weather tracking.")
                             .font(.caption)
                             .foregroundColor(.gray)
+
+                        Link(destination: URL(string: "https://openweathermap.org")!) {
+                            HStack {
+                                Image(systemName: "link")
+                                Text("Get a free API key at openweathermap.org")
+                            }
+                            .font(.caption)
+                        }
                     }
                 }
                 

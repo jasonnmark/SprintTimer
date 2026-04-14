@@ -5,9 +5,11 @@ import SwiftData
 struct SprintTimerApp: App {
     @State private var isReady = false
     @State private var showRestorePrompt = false
+    @State private var showWeatherPrompt = false
 
     private let dataManager = DataManager.shared
     private let syncManager = SyncManager.shared
+    private let hasShownWeatherPromptKey = "hasShownWeatherPrompt"
 
     var body: some Scene {
         WindowGroup {
@@ -31,6 +33,14 @@ struct SprintTimerApp: App {
                 }
                 // Daily backup check
                 BackupManager.shared.backupIfNeeded()
+
+                // One-time weather API prompt for new users
+                let defaults = UserDefaults(suiteName: "group.com.JasonMark.SprintTimer")
+                if defaults?.bool(forKey: hasShownWeatherPromptKey) != true,
+                   !WeatherService.shared.hasAPIKey {
+                    showWeatherPrompt = true
+                    defaults?.set(true, forKey: hasShownWeatherPromptKey)
+                }
             }
             .alert("Restore from Backup?", isPresented: $showRestorePrompt) {
                 Button("Restore") {
@@ -46,6 +56,15 @@ struct SprintTimerApp: App {
                 }
             } message: {
                 Text("A cloud backup was found. Would you like to restore your run history?")
+            }
+            .alert("Track Weather Data?", isPresented: $showWeatherPrompt) {
+                Button("Open Settings") {
+                    // Switch to settings tab
+                    NotificationCenter.default.post(name: Notification.Name("SwitchToSettings"), object: nil)
+                }
+                Button("Maybe Later", role: .cancel) { }
+            } message: {
+                Text("Sprint Timer can record weather conditions with each run. To enable this, get a free API key from openweathermap.org and enter it in Settings.")
             }
         }
         .modelContainer(dataManager.modelContainer)

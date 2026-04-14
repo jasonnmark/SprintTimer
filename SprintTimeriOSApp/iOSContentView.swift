@@ -24,6 +24,9 @@ struct iOSContentView: View {
                 }
                 .tag(2)
         }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("SwitchToSettings"))) { _ in
+            selectedTab = 1
+        }
     }
 }
 
