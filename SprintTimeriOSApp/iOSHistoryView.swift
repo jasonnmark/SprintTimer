@@ -10,6 +10,8 @@ struct iOSHistoryView: View {
     @State private var showingNoteEditor = false
     @State private var noteType: NoteType = .run
     @State private var selectedItem: Any?
+    @State private var selectedNoteRun: Run?
+    @State private var selectedNoteDate: Date?
     @Environment(\.scenePhase) var scenePhase
     @State private var lastRefresh = Date()
     @State private var selectedDistance: Int = 0 // 0 = All runs
@@ -222,6 +224,7 @@ struct iOSHistoryView: View {
                             onNotesTapped: {
                                 noteType = .day
                                 selectedItem = dayData.date
+                                selectedNoteDate = dayData.date
                                 showingNoteEditor = true
                             },
                             onExpandToggle: {
@@ -247,6 +250,7 @@ struct iOSHistoryView: View {
                                             onNotesTapped: {
                                                 noteType = .run
                                                 selectedItem = run
+                                                selectedNoteRun = run
                                                 showingNoteEditor = true
                                             }
                                         )
@@ -300,9 +304,9 @@ struct iOSHistoryView: View {
                 }
             }
             .sheet(isPresented: $showingNoteEditor) {
-                if noteType == .run, let run = selectedItem as? Run {
+                if noteType == .run, let run = selectedNoteRun {
                     RunNoteEditorView(run: run)
-                } else if noteType == .day, let date = selectedItem as? Date {
+                } else if noteType == .day, let date = selectedNoteDate {
                     DayNoteEditorView(date: date)
                 }
             }

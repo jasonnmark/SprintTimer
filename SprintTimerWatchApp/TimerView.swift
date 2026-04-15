@@ -23,6 +23,7 @@ struct TimerView: View {
     @State private var viewMode: TimerViewMode = .start
     @State private var savedElapsedTime: TimeInterval = 0
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.isLuminanceReduced) var isLuminanceReduced
     
     var currentMode: TimerViewMode {
         if viewMode == .actionMenu {
@@ -94,20 +95,38 @@ struct TimerView: View {
                 }
             } else if currentMode == .running {
                 // Timer Running
-                VStack(spacing: 4) {
-                    let parts = splitFormattedTime(viewModel.formattedTime)
-                    
-                    Text(parts.seconds)
-                        .font(.system(size: 60, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .multilineTextAlignment(.center)
-                    
-                    Text(parts.fraction)
-                        .font(.system(size: 28, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .multilineTextAlignment(.center)
+                if isLuminanceReduced {
+                    // Always On Display: simplified view, no milliseconds
+                    VStack(spacing: 8) {
+                        Text("RUNNING")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundColor(.white.opacity(0.6))
+                        let parts = splitFormattedTime(viewModel.formattedTime)
+                        Text(parts.seconds)
+                            .font(.system(size: 60, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.6))
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
+                        Text("Tap to stop")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.4))
+                    }
+                } else {
+                    VStack(spacing: 4) {
+                        let parts = splitFormattedTime(viewModel.formattedTime)
+
+                        Text(parts.seconds)
+                            .font(.system(size: 60, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
+
+                        Text(parts.fraction)
+                            .font(.system(size: 28, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
+                    }
                 }
             }
             
@@ -125,7 +144,7 @@ struct TimerView: View {
     
     @ViewBuilder
     private func actionMenuContent() -> some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 12) {
             Button(action: { saveRun() }) {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
@@ -187,9 +206,9 @@ struct TimerView: View {
     
     @ViewBuilder
     private func outlierAlertContent() -> some View {
-        VStack(spacing: 10) {
-            Text("Unusual\nTime")
-                .font(.system(size: 37, weight: .bold))
+        VStack(spacing: 16) {
+            Text("Keep?")
+                .font(.system(size: 26, weight: .bold))
                 .foregroundColor(.white)
                 .multilineTextAlignment(.center)
                 .padding(.top, 16)
@@ -203,10 +222,10 @@ struct TimerView: View {
                 tapHandled = false
             }) {
                 Text("Save")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, 10)
                     .background(Color.green.opacity(0.75))
                     .cornerRadius(10)
             }
@@ -221,10 +240,10 @@ struct TimerView: View {
                 tapHandled = false
             }) {
                 Text("Delete")
-                    .font(.system(size: 22, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, 10)
                     .background(Color.red.opacity(0.35))
                     .cornerRadius(10)
             }

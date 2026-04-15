@@ -52,6 +52,9 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     private lazy var motionManager = CMMotionManager()
     private let locationManager = CLLocationManager()
     private let healthStore = HKHealthStore()
+    #if os(watchOS)
+    private var extendedSession: WKExtendedRuntimeSession?
+    #endif
 
     var formattedTime: String {
         let minutes = Int(elapsedTime) / 60
@@ -302,9 +305,15 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         if dataManager.useGPS {
             locationManager.stopUpdatingLocation()
         }
+        #if os(watchOS)
+        stopExtendedSession()
+        #endif
     }
 
     private func beginTiming() {
+        #if os(watchOS)
+        startExtendedSession()
+        #endif
         startTime = Date()
         isRunning = true
         isWaitingForMotion = false
@@ -722,4 +731,24 @@ extension SprintTimerViewModel {
         }
         healthStore.execute(query)
     }
+
+    // MARK: - Extended Runtime Session (watchOS)
+    #if os(watchOS)
+    private func startExtendedSession() {
+        // Invalidate any existing session
+        stopExtendedSession()
+        let session = WKExtendedRuntimeSession()
+        session.start()
+        extendedSession = session
+        logger.info("Extended runtime session started")
+    }
+
+    private func stopExtendedSession() {
+        if let session = extendedSession, session.state == .running {
+            session.invalidate()
+            logger.info("Extended runtime session stopped")
+        }
+        extendedSession = nil
+    }
+    #endif
 }
