@@ -321,7 +321,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         isPaused = false
         pausedTime = 0
 
-        if dataManager.useHealthKit {
+        if HKHealthStore.isHealthDataAvailable() {
             fetchLatestHeartRate { [weak self] hr in
                 Task { @MainActor in
                     self?.startHeartRate = hr
@@ -379,7 +379,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     private func requestPermissions() {
         locationManager.requestWhenInUseAuthorization()
 
-        guard HKHealthStore.isHealthDataAvailable(), dataManager.useHealthKit else {
+        guard HKHealthStore.isHealthDataAvailable() else {
             return
         }
 
@@ -479,7 +479,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         let runId = run.id
 
         // Fetch HealthKit data asynchronously and write in one batch
-        if dataManager.useHealthKit, let start = startTime {
+        if HKHealthStore.isHealthDataAvailable(), let start = startTime {
             let end = Date()
             let distance = self.selectedDistance
             // Expand time window: HR sensor may report samples slightly after the sprint ends,

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import HealthKit
 
 // MARK: - Main Settings View
 struct SettingsView: View {
@@ -7,6 +8,7 @@ struct SettingsView: View {
     @StateObject private var dataManager = DataManager.shared
     @State private var debugInfo = ""
     @State private var showingClearAlert = false
+    @State private var isHealthConnected = false
 
     var body: some View {
         NavigationStack {
@@ -44,14 +46,28 @@ struct SettingsView: View {
                         get: { dataManager.useGPS },
                         set: { dataManager.useGPS = $0 }
                     ))
-                    Toggle("HealthKit", isOn: Binding(
-                        get: { dataManager.useHealthKit },
-                        set: { dataManager.useHealthKit = $0 }
-                    ))
+                    Text("Distance and pace via GPS")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    HStack(spacing: 6) {
+                        Image("AppleHealthIcon")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 20, height: 20)
+                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        Text("Apple Health")
+                        Spacer()
+                        Text(isHealthConnected ? "Connected" : "Off")
+                            .foregroundColor(isHealthConnected ? .green : .secondary)
+                            .font(.caption)
+                    }
                     Toggle("Altitude", isOn: Binding(
                         get: { dataManager.trackAltitude },
                         set: { dataManager.trackAltitude = $0 }
                     ))
+                    Text("Elevation gain via GPS")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
 
                 // MARK: Save Options
@@ -97,6 +113,12 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                if HKHealthStore.isHealthDataAvailable() {
+                    let status = HKHealthStore().authorizationStatus(for: HKObjectType.workoutType())
+                    isHealthConnected = status == .sharingAuthorized
+                }
+            }
         }
         .alert("Delete All Data?", isPresented: $showingClearAlert) {
             Button("Cancel", role: .cancel) { }

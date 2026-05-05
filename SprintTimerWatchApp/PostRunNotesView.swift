@@ -1,15 +1,33 @@
 import SwiftUI
 import SwiftData
+import HealthKit
 
 struct PostRunNotesView: View {
     let run: Run
     @Environment(\.dismiss) private var dismiss
     @State private var noteText = ""
+    private var savedToHealth: Bool {
+        guard HKHealthStore.isHealthDataAvailable() else { return false }
+        let status = HKHealthStore().authorizationStatus(for: HKObjectType.workoutType())
+        return status == .sharingAuthorized
+    }
     var body: some View {
         VStack(spacing: 6) {
 #if os(watchOS)
             ScrollView {
                 VStack(spacing: 12) {
+                    if savedToHealth {
+                        HStack(spacing: 4) {
+                            Image("AppleHealthIcon")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 14, height: 14)
+                            Text("Saved to Apple Health")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
                     HStack(spacing: 12) {
                         Button("Skip") { dismiss() }
                             .buttonStyle(.bordered)
@@ -52,6 +70,19 @@ struct PostRunNotesView: View {
             Text(run.formattedTime)
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(.gray)
+
+            if savedToHealth {
+                HStack(spacing: 4) {
+                    Image("AppleHealthIcon")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
+                    Text("Saved to Apple Health")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 2)
+            }
 
             TextEditor(text: $noteText)
                 .font(.body)

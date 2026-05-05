@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import HealthKit
 
 struct iOSSettingsView: View {
     @StateObject private var dataManager = DataManager.shared
@@ -10,7 +11,9 @@ struct iOSSettingsView: View {
     @State private var showingRestoreSheet = false
     @State private var availableBackups: [BackupManager.BackupInfo] = []
     @State private var weatherAPIKey = ""
-    
+    @State private var isHealthConnected = false
+    private let healthStore = HKHealthStore()
+
     var body: some View {
         NavigationView {
             Form {
@@ -46,37 +49,36 @@ struct iOSSettingsView: View {
                         .foregroundColor(.gray)
                 }
                 
-                Section(header: Text("Custom Run Types")) {
-                    ForEach(dataManager.customRunTypes) { runType in
-                        HStack {
-                            Text(runType.name)
-                            Spacer()
-                            Text("\(runType.distance)m")
-                                .foregroundColor(.gray)
-                        }
-                    }
-                    .onDelete { indexSet in
-                        dataManager.customRunTypes.remove(atOffsets: indexSet)
-                    }
-
-                    NavigationLink("Add Custom Type") {
-                        AddCustomRunTypeView(dataManager: dataManager)
-                    }
-
-                    if dataManager.customRunTypes.isEmpty {
-                        Text("Add custom distances like \"400m Hurdles\" or \"Backwards 100m\"")
-                            .font(.caption)
-                            .foregroundColor(.gray)
-                    }
-                }
-
                 Section(header: Text("Data Collection")) {
                     Toggle("GPS Verification", isOn: $dataManager.useGPS)
                         .onChange(of: dataManager.useGPS) { _, _ in Task { await updateDebugInfo() } }
-                    Toggle("HealthKit Integration", isOn: $dataManager.useHealthKit)
-                        .onChange(of: dataManager.useHealthKit) { _, _ in Task { await updateDebugInfo() } }
+                    Text("Records GPS coordinates during sprints to calculate distance and pace.")
+                        .font(.caption)
+                        .foregroundColor(.gray)
                     Toggle("Altitude Tracking", isOn: $dataManager.trackAltitude)
                         .onChange(of: dataManager.trackAltitude) { _, _ in Task { await updateDebugInfo() } }
+                    Text("Captures elevation from GPS during sprints to calculate altitude gain.")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+
+                Section {
+                    NavigationLink {
+                        AppleHealthSettingsView()
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image("AppleHealthIcon")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 28, height: 28)
+                                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            Text("Apple Health")
+                            Spacer()
+                            Text(isHealthConnected ? "Connected" : "Not Connected")
+                                .foregroundColor(isHealthConnected ? .green : .secondary)
+                                .font(.subheadline)
+                        }
+                    }
                 }
 
                 Section(header: Text("Weather Data")) {
@@ -131,7 +133,7 @@ struct iOSSettingsView: View {
                         Label("Time & Date", systemImage: "clock")
                         Label("Distance & Time", systemImage: "timer")
                         
-                        if dataManager.useHealthKit {
+                        if isHealthConnected {
                             Label("Heart Rate (start/end)", systemImage: "heart")
                             Label("Steps & Stride Length", systemImage: "figure.walk")
                         }
@@ -268,6 +270,7 @@ struct iOSSettingsView: View {
         .onAppear {
             dataManager.refresh() // Force refresh on appear
             setupInitialState()
+            checkHealthStatus()
             Task { await updateDebugInfo() }
         }
         .alert("Clear All Data?", isPresented: $showingClearAlert) {
@@ -285,6 +288,12 @@ struct iOSSettingsView: View {
         }
     }
     
+    private func checkHealthStatus() {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        let status = healthStore.authorizationStatus(for: HKObjectType.workoutType())
+        isHealthConnected = status == .sharingAuthorized
+    }
+
     private func setupInitialState() {
         if let index = StartMode.allCases.firstIndex(of: dataManager.startMode) {
             selectedStartModeIndex = index
@@ -498,38 +507,3 @@ struct RestoreBackupView: View {
     }
 }
 
-struct AddCustomRunTypeView: View {
-    @ObservedObject var dataManager: DataManager
-    @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var distanceText = ""
-
-    var body: some View {
-        Form {
-            Section(header: Text("New Custom Run Type")) {
-                TextField("Name (e.g. 400m Hurdles)", text: $name)
-                TextField("Distance in meters", text: $distanceText)
-                    .keyboardType(.numberPad)
-            }
-
-            Section {
-                Text("Custom run types appear in the distance picker on the watch alongside 100m, 200m, and 400m.")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-            }
-        }
-        .navigationTitle("Add Custom Type")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Save") {
-                    if let distance = Int(distanceText), !name.isEmpty {
-                        dataManager.customRunTypes.append(CustomRunType(name: name, distance: distance))
-                        dismiss()
-                    }
-                }
-                .disabled(name.isEmpty || Int(distanceText) == nil)
-            }
-        }
-    }
-}

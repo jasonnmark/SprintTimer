@@ -68,7 +68,6 @@ class DataManager: ObservableObject {
     private let startModeKey = "settings.startMode"
     private let countdownTimeKey = "settings.countdownTime"
     private let useGPSKey = "settings.useGPS"
-    private let useHealthKitKey = "settings.useHealthKit"
     private let trackWeatherKey = "settings.trackWeather"
     private let trackAltitudeKey = "settings.trackAltitude"
     private let saveTapTimeKey = "settings.saveTapTime"
@@ -156,16 +155,6 @@ class DataManager: ObservableObject {
         }
     }
 
-    @Published var useHealthKit: Bool = true {
-        didSet {
-            defaults.set(useHealthKit, forKey: useHealthKitKey)
-            if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    SyncManager.shared.syncSettings()
-                }
-            }
-        }
-    }
 
     @Published var trackWeather: Bool = false {
         didSet {
@@ -271,9 +260,6 @@ class DataManager: ObservableObject {
         if defaults.object(forKey: useGPSKey) == nil {
             defaults.set(true, forKey: useGPSKey)
         }
-        if defaults.object(forKey: useHealthKitKey) == nil {
-            defaults.set(true, forKey: useHealthKitKey)
-        }
         if defaults.object(forKey: trackWeatherKey) == nil {
             defaults.set(false, forKey: trackWeatherKey)
         }
@@ -299,7 +285,6 @@ class DataManager: ObservableObject {
         startMode = StartMode(rawValue: savedMode) ?? .tap
         countdownTime = defaults.integer(forKey: countdownTimeKey) > 0 ? defaults.integer(forKey: countdownTimeKey) : 5
         useGPS = defaults.bool(forKey: useGPSKey)
-        useHealthKit = defaults.bool(forKey: useHealthKitKey)
         trackWeather = defaults.bool(forKey: trackWeatherKey)
         trackAltitude = defaults.bool(forKey: trackAltitudeKey)
         saveTapTime = defaults.bool(forKey: saveTapTimeKey)
@@ -343,7 +328,6 @@ class DataManager: ObservableObject {
         info += "Start Mode: \(startMode.rawValue)\n"
         info += "Countdown: \(countdownTime)s\n"
         info += "GPS: \(useGPS)\n"
-        info += "HealthKit: \(useHealthKit)\n"
         info += "Weather: \(trackWeather)\n"
         info += "Altitude: \(trackAltitude)\n"
         info += "Save Tap Time: \(saveTapTime)\n"

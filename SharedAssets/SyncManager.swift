@@ -122,7 +122,6 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
             "startMode": dataManager.startMode.rawValue,
             "countdownTime": dataManager.countdownTime,
             "useGPS": dataManager.useGPS,
-            "useHealthKit": dataManager.useHealthKit,
             "trackWeather": dataManager.trackWeather,
             "trackAltitude": dataManager.trackAltitude,
             "saveTapTime": dataManager.saveTapTime,
@@ -298,11 +297,6 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         if let useGPS = settings["useGPS"] as? Bool,
            dataManager.useGPS != useGPS {
             dataManager.useGPS = useGPS
-        }
-
-        if let useHealthKit = settings["useHealthKit"] as? Bool,
-           dataManager.useHealthKit != useHealthKit {
-            dataManager.useHealthKit = useHealthKit
         }
 
         if let trackWeather = settings["trackWeather"] as? Bool,
