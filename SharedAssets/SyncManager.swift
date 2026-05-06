@@ -126,7 +126,7 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
             "trackAltitude": dataManager.trackAltitude,
             "saveTapTime": dataManager.saveTapTime,
             "saveGPSTime": dataManager.saveGPSTime,
-            "betaMode": dataManager.betaMode
+            "betaMode": dataManager.debugMode
         ]
         if let customData = try? JSONEncoder().encode(dataManager.customRunTypes) {
             settings["customRunTypes"] = customData
@@ -320,8 +320,8 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         }
 
         if let betaMode = settings["betaMode"] as? Bool,
-           dataManager.betaMode != betaMode {
-            dataManager.betaMode = betaMode
+           dataManager.debugMode != betaMode {
+            dataManager.debugMode = betaMode
         }
 
         if let customData = settings["customRunTypes"] as? Data,

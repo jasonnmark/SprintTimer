@@ -82,16 +82,16 @@ struct SettingsView: View {
                     ))
                 }
 
-                // MARK: Beta
+                // MARK: Debug
                 Section {
-                    Toggle("Beta Mode", isOn: Binding(
-                        get: { dataManager.betaMode },
-                        set: { dataManager.betaMode = $0 }
+                    Toggle("Debug Mode", isOn: Binding(
+                        get: { dataManager.debugMode },
+                        set: { dataManager.debugMode = $0 }
                     ))
                 }
 
-                // MARK: Beta Tools
-                if dataManager.betaMode {
+                // MARK: Debug Tools
+                if dataManager.debugMode {
                     Section("Debug") {
                         Button("Show Debug Info") {
                             Task {

@@ -223,17 +223,17 @@ struct iOSSettingsView: View {
                         .foregroundColor(.gray)
                 }
 
-                Section(header: Text("Beta")) {
-                    Toggle("Beta Mode", isOn: $dataManager.betaMode)
+                Section(header: Text("Debug")) {
+                    Toggle("Debug Mode", isOn: $dataManager.debugMode)
 
-                    if !dataManager.betaMode {
-                        Text("Enable beta mode to access debug tools and experimental features.")
+                    if !dataManager.debugMode {
+                        Text("Enable debug mode to access debug tools and experimental features.")
                             .font(.caption)
                             .foregroundColor(.gray)
                     }
                 }
 
-                if dataManager.betaMode {
+                if dataManager.debugMode {
                     Section(header: Text("Debug Tools").foregroundColor(.red)) {
                         Text(debugInfo)
                             .font(.system(.caption2, design: .monospaced))

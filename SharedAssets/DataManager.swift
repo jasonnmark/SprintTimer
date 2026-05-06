@@ -75,11 +75,11 @@ class DataManager: ObservableObject {
     private let customRunTypesKey = "settings.customRunTypes"
     private let hasSeenTutorialKey = "settings.hasSeenTutorial"
     private let openWeatherAPIKeyKey = "settings.openWeatherAPIKey"
-    private let betaModeKey = "settings.betaMode"
+    private let debugModeKey = "settings.betaMode"
 
-    @Published var betaMode: Bool = false {
+    @Published var debugMode: Bool = false {
         didSet {
-            defaults.set(betaMode, forKey: betaModeKey)
+            defaults.set(debugMode, forKey: debugModeKey)
             if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     SyncManager.shared.syncSettings()
@@ -290,7 +290,7 @@ class DataManager: ObservableObject {
         saveTapTime = defaults.bool(forKey: saveTapTimeKey)
         saveGPSTime = defaults.bool(forKey: saveGPSTimeKey)
         hasSeenTutorial = defaults.bool(forKey: hasSeenTutorialKey)
-        betaMode = defaults.bool(forKey: betaModeKey)
+        debugMode = defaults.bool(forKey: debugModeKey)
         loadCustomRunTypes()
     }
 
