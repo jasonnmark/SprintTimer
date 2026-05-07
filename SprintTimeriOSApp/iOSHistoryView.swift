@@ -7,9 +7,8 @@ struct iOSHistoryView: View {
     @State private var editMode: EditMode = .inactive
     @State private var selectedRuns = Set<UUID>()
     @State private var selectedDays = Set<Date>()
-    @State private var showingNoteEditor = false
-    @State private var noteType: NoteType = .run
-    @State private var selectedItem: Any?
+    @State private var showingRunNoteEditor = false
+    @State private var showingDayNoteEditor = false
     @State private var selectedNoteRun: Run?
     @State private var selectedNoteDate: Date?
     @State private var selectedTimeRun: Run?
@@ -20,10 +19,6 @@ struct iOSHistoryView: View {
     @State private var expandedDays = Set<Date>()
     @State private var hasInitializedExpansion = false
 
-    enum NoteType {
-        case run, day
-    }
-    
     // Get unique distances from runs
     var availableDistances: [Int] {
         let distances = Set(allRuns.map { $0.distance }).sorted()
@@ -224,10 +219,8 @@ struct iOSHistoryView: View {
                                 toggleDaySelection(dayData.date, runs: allRuns(for: dayData))
                             },
                             onNotesTapped: {
-                                noteType = .day
-                                selectedItem = dayData.date
                                 selectedNoteDate = dayData.date
-                                showingNoteEditor = true
+                                showingDayNoteEditor = true
                             },
                             onExpandToggle: {
                                 toggleDay(dayData.date)
@@ -250,10 +243,8 @@ struct iOSHistoryView: View {
                                                 toggleRunSelection(run.id)
                                             },
                                             onNotesTapped: {
-                                                noteType = .run
-                                                selectedItem = run
                                                 selectedNoteRun = run
-                                                showingNoteEditor = true
+                                                showingRunNoteEditor = true
                                             }
                                         )
                                         .swipeActions(edge: .leading) {
@@ -314,10 +305,13 @@ struct iOSHistoryView: View {
                     selectedDays.removeAll()
                 }
             }
-            .sheet(isPresented: $showingNoteEditor) {
-                if noteType == .run, let run = selectedNoteRun {
+            .sheet(isPresented: $showingRunNoteEditor) {
+                if let run = selectedNoteRun {
                     RunNoteEditorView(run: run)
-                } else if noteType == .day, let date = selectedNoteDate {
+                }
+            }
+            .sheet(isPresented: $showingDayNoteEditor) {
+                if let date = selectedNoteDate {
                     DayNoteEditorView(date: date)
                 }
             }
