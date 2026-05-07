@@ -148,20 +148,22 @@ struct TimerView: View {
             Button(action: { saveRun() }) {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 32))
-                    Text("Save")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(.system(size: 36))
+                    Text(viewModel.formattedTime)
+                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
                     Spacer(minLength: 0)
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 10)
                 .background(Color.green.opacity(0.75))
-                .cornerRadius(10)
+                .cornerRadius(12)
             }
             .buttonStyle(PlainButtonStyle())
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 0)
 
             Button(action: { saveWithNotes() }) {
                 HStack(spacing: 8) {
