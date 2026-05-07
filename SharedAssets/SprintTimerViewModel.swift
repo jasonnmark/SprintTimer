@@ -53,7 +53,8 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     private let locationManager = CLLocationManager()
     private let healthStore = HKHealthStore()
     #if os(watchOS)
-    private var extendedSession: WKExtendedRuntimeSession?
+    private var workoutSession: HKWorkoutSession?
+    private var workoutBuilder: HKLiveWorkoutBuilder?
     #endif
 
     var formattedTime: String {
@@ -256,6 +257,10 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         timer?.invalidate()
         timer = nil
 
+        #if os(watchOS)
+        stopWorkoutSession()
+        #endif
+
         // Check if it's an outlier before saving
         let outlierCheck = isRunOutlier(modelContext: modelContext)
 
@@ -306,13 +311,15 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             locationManager.stopUpdatingLocation()
         }
         #if os(watchOS)
-        stopExtendedSession()
+        // Defensive: workout session is normally ended in stopRun(); this catches paths where
+        // the timer is reset without going through stopRun (e.g., user discards a run mid-sprint).
+        stopWorkoutSession()
         #endif
     }
 
     private func beginTiming() {
         #if os(watchOS)
-        startExtendedSession()
+        startWorkoutSession()
         #endif
         startTime = Date()
         isRunning = true
@@ -383,14 +390,23 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             return
         }
 
-        let typesToRead: Set<HKObjectType> = [
+        var typesToRead: Set<HKObjectType> = [
             HKObjectType.quantityType(forIdentifier: .heartRate)!,
             HKObjectType.quantityType(forIdentifier: .stepCount)!
         ]
 
-        let typesToWrite: Set<HKSampleType> = [
+        var typesToWrite: Set<HKSampleType> = [
             HKObjectType.workoutType()
         ]
+
+        #if os(watchOS)
+        // The live workout builder collects these and writes them as part of the saved workout.
+        typesToRead.insert(HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!)
+        typesToRead.insert(HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!)
+        typesToWrite.insert(HKObjectType.quantityType(forIdentifier: .heartRate)!)
+        typesToWrite.insert(HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!)
+        typesToWrite.insert(HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning)!)
+        #endif
 
         healthStore.requestAuthorization(toShare: typesToWrite, read: typesToRead) { success, error in
             if let error = error {
@@ -406,6 +422,9 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             pausedTime = elapsedTime
             timer?.invalidate()
             timer = nil
+            #if os(watchOS)
+            workoutSession?.pause()
+            #endif
         }
     }
 
@@ -422,6 +441,9 @@ class SprintTimerViewModel: NSObject, ObservableObject {
                     self.elapsedTime = Date().timeIntervalSince(startTime)
                 }
             }
+            #if os(watchOS)
+            workoutSession?.resume()
+            #endif
         }
     }
 
@@ -732,23 +754,99 @@ extension SprintTimerViewModel {
         healthStore.execute(query)
     }
 
-    // MARK: - Extended Runtime Session (watchOS)
+    // MARK: - Workout Session (watchOS)
     #if os(watchOS)
-    private func startExtendedSession() {
-        // Invalidate any existing session
-        stopExtendedSession()
-        let session = WKExtendedRuntimeSession()
-        session.start()
-        extendedSession = session
-        logger.info("Extended runtime session started")
+    private func startWorkoutSession() {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        // Defensive: clean up any leftover session from a previous sprint that didn't tear down cleanly.
+        stopWorkoutSession()
+
+        let configuration = HKWorkoutConfiguration()
+        configuration.activityType = .running
+        configuration.locationType = .outdoor
+
+        do {
+            let session = try HKWorkoutSession(healthStore: healthStore, configuration: configuration)
+            let builder = session.associatedWorkoutBuilder()
+            builder.dataSource = HKLiveWorkoutDataSource(healthStore: healthStore, workoutConfiguration: configuration)
+
+            session.delegate = self
+            builder.delegate = self
+
+            let startDate = Date()
+            session.startActivity(with: startDate)
+            builder.beginCollection(withStart: startDate) { success, error in
+                if let error {
+                    logger.error("Workout builder beginCollection failed: \(error)")
+                }
+            }
+
+            workoutSession = session
+            workoutBuilder = builder
+            logger.info("Workout session started")
+        } catch {
+            logger.error("Failed to start HKWorkoutSession: \(error)")
+        }
     }
 
-    private func stopExtendedSession() {
-        if let session = extendedSession, session.state == .running {
-            session.invalidate()
-            logger.info("Extended runtime session stopped")
+    private func stopWorkoutSession() {
+        guard let session = workoutSession, let builder = workoutBuilder else {
+            workoutSession = nil
+            workoutBuilder = nil
+            return
         }
-        extendedSession = nil
+        // Drop strong refs synchronously so a re-entrant start doesn't race the async finish.
+        workoutSession = nil
+        workoutBuilder = nil
+
+        let endDate = Date()
+        session.end()
+        builder.endCollection(withEnd: endDate) { _, error in
+            if let error {
+                logger.error("Workout builder endCollection failed: \(error)")
+            }
+            builder.finishWorkout { workout, error in
+                if let error {
+                    logger.error("finishWorkout failed: \(error)")
+                } else if let workout {
+                    logger.info("Workout saved: duration=\(workout.duration)s")
+                }
+            }
+        }
     }
     #endif
 }
+
+// MARK: - Workout Session Delegates (watchOS)
+#if os(watchOS)
+extension SprintTimerViewModel: HKWorkoutSessionDelegate {
+    nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didChangeTo toState: HKWorkoutSessionState, from fromState: HKWorkoutSessionState, date: Date) {
+        logger.info("Workout session state: \(fromState.rawValue) → \(toState.rawValue)")
+    }
+
+    nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+        logger.error("Workout session failed: \(error)")
+    }
+}
+
+extension SprintTimerViewModel: HKLiveWorkoutBuilderDelegate {
+    nonisolated func workoutBuilder(_ workoutBuilder: HKLiveWorkoutBuilder, didCollectDataOf collectedTypes: Set<HKSampleType>) {
+        guard let hrType = HKObjectType.quantityType(forIdentifier: .heartRate) else { return }
+        guard collectedTypes.contains(hrType) else { return }
+        guard let stats = workoutBuilder.statistics(for: hrType) else { return }
+
+        let unit = HKUnit.count().unitDivided(by: HKUnit.minute())
+        let mostRecent = stats.mostRecentQuantity()?.doubleValue(for: unit)
+        let avg = stats.averageQuantity()?.doubleValue(for: unit)
+        let max = stats.maximumQuantity()?.doubleValue(for: unit)
+
+        Task { @MainActor in
+            if let mostRecent { self.endHeartRate = mostRecent }
+            if let avg { self.averageHeartRate = avg }
+            if let max { self.maxHeartRate = max }
+        }
+    }
+
+    nonisolated func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}
+}
+#endif

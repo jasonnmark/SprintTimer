@@ -136,6 +136,13 @@
 			);
 			target = 96194DF42E3546E1008DA54F /* SprintTimer Watch App */;
 		};
+		9701F0011000000000000001 /* Exceptions for "SprintTimerWatchApp" folder in "SprintTimer Watch App" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 96194DF42E3546E1008DA54F /* SprintTimer Watch App */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -146,6 +153,9 @@
 		};
 		96194DF92E3546E1008DA54F /* SprintTimerWatchApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				9701F0011000000000000001 /* Exceptions for "SprintTimerWatchApp" folder in "SprintTimer Watch App" target */,
+			);
 			path = SprintTimerWatchApp;
 			sourceTree = "<group>";
 		};
@@ -688,6 +698,7 @@
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SprintTimer uses your location during sprints to calculate running distance, pace, and elevation gain.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "SprintTimer uses the accelerometer to detect when you start sprinting, so the timer can begin automatically.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_FILE = "SprintTimerWatchApp/Info.plist";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.JasonMark.SprintTimer;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -723,6 +734,7 @@
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SprintTimer uses your location during sprints to calculate running distance, pace, and elevation gain.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "SprintTimer uses the accelerometer to detect when you start sprinting, so the timer can begin automatically.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_FILE = "SprintTimerWatchApp/Info.plist";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.JasonMark.SprintTimer;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
