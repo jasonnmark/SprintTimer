@@ -12,6 +12,8 @@ struct iOSHistoryView: View {
     @State private var selectedItem: Any?
     @State private var selectedNoteRun: Run?
     @State private var selectedNoteDate: Date?
+    @State private var selectedTimeRun: Run?
+    @State private var showingTimeEditor = false
     @Environment(\.scenePhase) var scenePhase
     @State private var lastRefresh = Date()
     @State private var selectedDistance: Int = 0 // 0 = All runs
@@ -254,6 +256,15 @@ struct iOSHistoryView: View {
                                                 showingNoteEditor = true
                                             }
                                         )
+                                        .swipeActions(edge: .leading) {
+                                            Button {
+                                                selectedTimeRun = run
+                                                showingTimeEditor = true
+                                            } label: {
+                                                Label("Edit Time", systemImage: "stopwatch")
+                                            }
+                                            .tint(.blue)
+                                        }
                                     }
                                     .onDelete { indexSet in
                                         deleteRuns(at: indexSet, from: locationGroup.runs)
@@ -308,6 +319,11 @@ struct iOSHistoryView: View {
                     RunNoteEditorView(run: run)
                 } else if noteType == .day, let date = selectedNoteDate {
                     DayNoteEditorView(date: date)
+                }
+            }
+            .sheet(isPresented: $showingTimeEditor) {
+                if let run = selectedTimeRun {
+                    RunTimeEditorView(run: run)
                 }
             }
         }
@@ -406,8 +422,9 @@ struct DayHeaderView: View {
                                 .foregroundColor(.gray)
                         }
                     }
+                    .contentShape(Rectangle())
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(BorderlessButtonStyle())
 
                 Spacer()
 
@@ -416,8 +433,9 @@ struct DayHeaderView: View {
                         .font(.system(size: 20))
                         .foregroundColor(hasDayNote ? .blue : .gray)
                         .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(BorderlessButtonStyle())
             }
             .padding(.vertical, 4)
 
@@ -841,5 +859,106 @@ struct DayNoteEditorView: View {
     private func saveDayNotes() {
         dailyNotesManager.setNote(noteText, for: date)
         dismiss()
+    }
+}
+
+struct RunTimeEditorView: View {
+    let run: Run
+    @Environment(\.dismiss) private var dismiss
+    @State private var timeText = ""
+    @State private var errorMessage: String?
+    @FocusState private var isTextFieldFocused: Bool
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Run Details")) {
+                    HStack {
+                        Text("Distance:")
+                        Spacer()
+                        Text("\(run.distance)m")
+                    }
+                    HStack {
+                        Text("Date:")
+                        Spacer()
+                        Text(run.formattedDate)
+                    }
+                    HStack {
+                        Text("Original time:")
+                        Spacer()
+                        Text(run.formattedTime)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Section(header: Text("New Time"), footer: Text("Format: 12.345 or 1:23.456")) {
+                    TextField("Time", text: $timeText)
+                        .keyboardType(.decimalPad)
+                        .focused($isTextFieldFocused)
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+            .navigationTitle("Edit Run Time")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        saveTime()
+                    }
+                    .fontWeight(.medium)
+                    .disabled(parsedInterval(from: timeText) == nil)
+                }
+            }
+            .onAppear {
+                timeText = run.formattedTime
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isTextFieldFocused = true
+                }
+            }
+        }
+    }
+
+    private func parsedInterval(from text: String) -> TimeInterval? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+
+        // Accept "M:SS.mmm" or "S.mmm" / "SS.mmm"
+        let parts = trimmed.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+        switch parts.count {
+        case 1:
+            guard let seconds = Double(parts[0]), seconds >= 0 else { return nil }
+            return seconds
+        case 2:
+            guard let minutes = Int(parts[0]), minutes >= 0,
+                  let seconds = Double(parts[1]), seconds >= 0, seconds < 60
+            else { return nil }
+            return TimeInterval(minutes) * 60 + seconds
+        default:
+            return nil
+        }
+    }
+
+    private func saveTime() {
+        guard let newInterval = parsedInterval(from: timeText) else {
+            errorMessage = "Enter a valid time like 12.345 or 1:23.456"
+            return
+        }
+        run.elapsedTime = newInterval
+        do {
+            try DataManager.shared.modelContainer.mainContext.save()
+            // Push to watch via the existing upsert path (handleRunAdded updates by ID).
+            let syncData = SyncManager.shared.runToSyncData(run)
+            SyncManager.shared.syncNewRun(syncData)
+            dismiss()
+        } catch {
+            errorMessage = "Save failed: \(error.localizedDescription)"
+        }
     }
 }
