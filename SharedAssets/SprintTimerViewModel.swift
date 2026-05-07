@@ -55,6 +55,9 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     #if os(watchOS)
     private var workoutSession: HKWorkoutSession?
     private var workoutBuilder: HKLiveWorkoutBuilder?
+    // Pinned at stopRun() so the workout's effective end matches the sprint end,
+    // not the moment the user finally taps Save in the action menu.
+    private var sprintEndDate: Date?
     #endif
 
     var formattedTime: String {
@@ -258,7 +261,11 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         timer = nil
 
         #if os(watchOS)
-        stopWorkoutSession()
+        // Pin the workout's end to the actual sprint end, then pause data collection so the
+        // post-stop dialog window doesn't bias HR/energy/distance statistics.
+        // Final finish-or-discard happens later in saveRunData / resetTimer.
+        sprintEndDate = Date()
+        workoutSession?.pause()
         #endif
 
         // Check if it's an outlier before saving
@@ -285,6 +292,13 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     }
 
     func resetTimer() {
+        #if os(watchOS)
+        // Discard the workout if the user is bailing without saving. saveRunData has already
+        // finalized with save=true on the save path, so workoutSession/Builder are nil there.
+        if !hasSavedCurrentRun {
+            finalizeWorkoutSession(save: false)
+        }
+        #endif
         elapsedTime = 0
         hasSavedCurrentRun = false
         isRunning = false
@@ -310,11 +324,6 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         if dataManager.useGPS {
             locationManager.stopUpdatingLocation()
         }
-        #if os(watchOS)
-        // Defensive: workout session is normally ended in stopRun(); this catches paths where
-        // the timer is reset without going through stopRun (e.g., user discards a run mid-sprint).
-        stopWorkoutSession()
-        #endif
     }
 
     private func beginTiming() {
@@ -500,15 +509,27 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         // Capture run ID for async work (avoids capturing non-Sendable Run across isolation boundaries)
         let runId = run.id
 
+        #if os(watchOS)
+        // Snapshot HR values streamed in by HKLiveWorkoutBuilderDelegate during the sprint —
+        // these are bounded to the workout, unlike the post-hoc query which uses a wider window.
+        let liveEndHR = endHeartRate
+        let liveAvgHR = averageHeartRate
+        let liveMaxHR = maxHeartRate
+        finalizeWorkoutSession(save: true)
+        #endif
+
         // Fetch HealthKit data asynchronously and write in one batch
         if HKHealthStore.isHealthDataAvailable(), let start = startTime {
             let end = Date()
             let distance = self.selectedDistance
+            #if !os(watchOS)
             // Expand time window: HR sensor may report samples slightly after the sprint ends,
             // and for very short sprints we need a wider window to catch any samples
             let hrStart = start.addingTimeInterval(-30) // 30s before sprint
             let hrEnd = end.addingTimeInterval(30) // 30s after sprint
+            #endif
             Task { @MainActor in
+                #if !os(watchOS)
                 let hr: Double? = await withCheckedContinuation { cont in
                     self.fetchLatestHeartRate { cont.resume(returning: $0) }
                 }
@@ -517,6 +538,11 @@ class SprintTimerViewModel: NSObject, ObservableObject {
                         cont.resume(returning: (avg, max))
                     }
                 }
+                #else
+                let hr = liveEndHR
+                let avg = liveAvgHR
+                let max = liveMaxHR
+                #endif
                 let stepCount: Int? = await withCheckedContinuation { cont in
                     self.fetchSteps(from: start, to: end) { cont.resume(returning: $0) }
                 }
@@ -758,8 +784,8 @@ extension SprintTimerViewModel {
     #if os(watchOS)
     private func startWorkoutSession() {
         guard HKHealthStore.isHealthDataAvailable() else { return }
-        // Defensive: clean up any leftover session from a previous sprint that didn't tear down cleanly.
-        stopWorkoutSession()
+        // Defensive: discard any leftover session from a prior sprint that didn't tear down cleanly.
+        finalizeWorkoutSession(save: false)
 
         let configuration = HKWorkoutConfiguration()
         configuration.activityType = .running
@@ -789,29 +815,38 @@ extension SprintTimerViewModel {
         }
     }
 
-    private func stopWorkoutSession() {
+    private func finalizeWorkoutSession(save: Bool) {
         guard let session = workoutSession, let builder = workoutBuilder else {
             workoutSession = nil
             workoutBuilder = nil
+            sprintEndDate = nil
             return
         }
         // Drop strong refs synchronously so a re-entrant start doesn't race the async finish.
         workoutSession = nil
         workoutBuilder = nil
+        let endDate = sprintEndDate ?? Date()
+        sprintEndDate = nil
 
-        let endDate = Date()
+        // session.end() is valid from .running OR .paused; transitions through .stopped → .ended.
         session.end()
-        builder.endCollection(withEnd: endDate) { _, error in
-            if let error {
-                logger.error("Workout builder endCollection failed: \(error)")
-            }
-            builder.finishWorkout { workout, error in
+
+        if save {
+            builder.endCollection(withEnd: endDate) { _, error in
                 if let error {
-                    logger.error("finishWorkout failed: \(error)")
-                } else if let workout {
-                    logger.info("Workout saved: duration=\(workout.duration)s")
+                    logger.error("Workout builder endCollection failed: \(error)")
+                }
+                builder.finishWorkout { workout, error in
+                    if let error {
+                        logger.error("finishWorkout failed: \(error)")
+                    } else if let workout {
+                        logger.info("Workout saved: duration=\(workout.duration)s")
+                    }
                 }
             }
+        } else {
+            builder.discardWorkout()
+            logger.info("Workout discarded")
         }
     }
     #endif
