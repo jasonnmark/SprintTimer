@@ -28,27 +28,35 @@ struct LauncherView: View {
     var body: some View {
         switch family {
         case .accessoryCircular:
-            ZStack {
-                AccessoryWidgetBackground()
-                Image(systemName: "stopwatch.fill")
-                    .font(.system(size: 22, weight: .medium))
-            }
+            // No AccessoryWidgetBackground — the logo already has its own colored background.
+            Image("AppLogo")
+                .resizable()
+                .scaledToFit()
+                .clipShape(Circle())
         case .accessoryCorner:
-            Image(systemName: "stopwatch.fill")
-                .font(.system(size: 18, weight: .medium))
+            Image("AppLogo")
+                .resizable()
+                .scaledToFit()
+                .clipShape(Circle())
                 .widgetLabel { Text("Sprint") }
         case .accessoryRectangular:
             HStack(spacing: 8) {
-                Image(systemName: "stopwatch.fill")
-                    .font(.system(size: 24, weight: .medium))
+                Image("AppLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 36, height: 36)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 Text("Sprint Timer")
                     .font(.system(size: 16, weight: .semibold))
                 Spacer(minLength: 0)
             }
         case .accessoryInline:
+            // Inline complications only support text + an SF Symbol, not bundled images.
             Label("Sprint Timer", systemImage: "stopwatch.fill")
         default:
-            Image(systemName: "stopwatch.fill")
+            Image("AppLogo")
+                .resizable()
+                .scaledToFit()
         }
     }
 }
