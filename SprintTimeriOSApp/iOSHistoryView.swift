@@ -27,6 +27,7 @@ struct iOSHistoryView: View {
     @State private var selectedDistance: Int = 0 // 0 = All runs
     @State private var expandedDays = Set<Date>()
     @State private var hasInitializedExpansion = false
+    @State private var hasWeatherKey: Bool = WeatherService.shared.hasAPIKey
 
     // Get unique distances from runs
     var availableDistances: [Int] {
@@ -131,6 +132,10 @@ struct iOSHistoryView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                if !hasWeatherKey {
+                    weatherKeyPill
+                }
+
                 // Filter Picker
                 HStack {
                     Text("Filter:")
@@ -281,6 +286,10 @@ struct iOSHistoryView: View {
             .navigationTitle("Sprint Timer")
             .onAppear {
                 expandMostRecentIfNeeded()
+                hasWeatherKey = WeatherService.shared.hasAPIKey
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("WeatherAPIKeyChanged"))) { _ in
+                hasWeatherKey = WeatherService.shared.hasAPIKey
             }
             .onChange(of: allRuns.count) { _, _ in
                 expandMostRecentIfNeeded()
@@ -322,12 +331,44 @@ struct iOSHistoryView: View {
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .active {
                 lastRefresh = Date()
+                hasWeatherKey = WeatherService.shared.hasAPIKey
                 // Request fresh data from Watch when app comes to foreground
                 SyncManager.shared.requestFullSync()
             }
         }
     }
-    
+
+    private var weatherKeyPill: some View {
+        Button {
+            NotificationCenter.default.post(name: Notification.Name("SwitchToSettings"), object: nil)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 14))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Weather isn't being recorded")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Tap to set up your free OpenWeather key")
+                        .font(.caption2)
+                        .opacity(0.85)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .opacity(0.7)
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color.orange)
+            .clipShape(Capsule())
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+        }
+        .buttonStyle(.plain)
+    }
+
     private func toggleDaySelection(_ date: Date, runs: [Run]) {
         if selectedDays.contains(date) {
             selectedDays.remove(date)
