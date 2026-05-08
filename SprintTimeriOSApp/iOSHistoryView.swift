@@ -562,6 +562,28 @@ struct LocationHeaderView: View {
         return String(format: "%.0f ft", feet)
     }
 
+    // Icons for metric columns that appear in the run rows below this header.
+    // Filtered to only the metrics actually present in this group's runs so we
+    // don't show a legend marker for an unused column.
+    private var metricLegend: [(icon: String, color: Color)] {
+        var legend: [(String, Color)] = []
+        if runs.contains(where: { ($0.actualDistance ?? 0) > 0 }) {
+            legend.append(("location.fill", .blue))
+        }
+        if runs.contains(where: {
+            $0.averageHeartRate != nil || $0.maxHeartRate != nil || $0.startHeartRate != nil || $0.endHeartRate != nil
+        }) {
+            legend.append(("heart.fill", .red))
+        }
+        if runs.contains(where: { ($0.steps ?? 0) > 0 }) {
+            legend.append(("figure.walk", .green))
+        }
+        if runs.contains(where: { ($0.strideLength ?? 0) > 0 }) {
+            legend.append(("ruler", .purple))
+        }
+        return legend
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             // Location name
@@ -646,6 +668,21 @@ struct LocationHeaderView: View {
                     }
                 }
             }
+
+            // Column legend for the run rows below — colors match the values in the rows.
+            if !metricLegend.isEmpty {
+                HStack(spacing: 14) {
+                    Image(systemName: "clock")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                    ForEach(metricLegend.indices, id: \.self) { i in
+                        Image(systemName: metricLegend[i].icon)
+                            .font(.caption2)
+                            .foregroundColor(metricLegend[i].color)
+                    }
+                }
+                .padding(.top, 2)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -683,49 +720,46 @@ struct RunRowView: View {
                             .fontDesign(.monospaced)
                     }
                     
-                    HStack(spacing: 12) {
+                    // Icons appear as a legend in the LocationHeaderView above; values here
+                    // stay color-coded to the same palette so each number identifies itself.
+                    HStack(spacing: 10) {
                         Text(run.date, style: .time)
                             .font(.caption)
                             .foregroundColor(.gray)
-                        
+
                         if let gpsDistance = run.actualDistance, gpsDistance > 0 {
-                            Label("\(Int(gpsDistance))m", systemImage: "location.fill")
+                            Text("\(Int(gpsDistance))m")
                                 .font(.caption)
                                 .foregroundColor(.blue)
                         }
-                        
-                        if run.averageHeartRate != nil || run.maxHeartRate != nil || run.startHeartRate != nil || run.endHeartRate != nil {
-                            HStack(spacing: 2) {
-                                Image(systemName: "heart.fill")
-                                    .font(.caption)
-                                    .foregroundColor(.red)
-                                if let avg = run.averageHeartRate {
-                                    Text("\(Int(avg))")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
-                                    if let max = run.maxHeartRate {
-                                        Text("/ \(Int(max))")
-                                            .font(.caption)
-                                            .foregroundColor(.red.opacity(0.7))
-                                    }
-                                } else if let end = run.endHeartRate {
-                                    Text("\(Int(end))")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
-                                } else if let start = run.startHeartRate {
-                                    Text("\(Int(start))")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
+
+                        if let avg = run.averageHeartRate {
+                            HStack(spacing: 0) {
+                                Text("\(Int(avg))")
+                                if let max = run.maxHeartRate {
+                                    Text("/\(Int(max))").opacity(0.7)
                                 }
                             }
+                            .font(.caption)
+                            .foregroundColor(.red)
+                        } else if let end = run.endHeartRate {
+                            Text("\(Int(end))")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        } else if let start = run.startHeartRate {
+                            Text("\(Int(start))")
+                                .font(.caption)
+                                .foregroundColor(.red)
                         }
+
                         if let steps = run.steps, steps > 0 {
-                            Label("\(steps)", systemImage: "figure.walk")
+                            Text("\(steps)")
                                 .font(.caption)
                                 .foregroundColor(.green)
                         }
+
                         if let stride = run.strideLength, stride > 0 {
-                            Label(String(format: "%.1fm", stride), systemImage: "ruler")
+                            Text(String(format: "%.1fm", stride))
                                 .font(.caption)
                                 .foregroundColor(.purple)
                         }
