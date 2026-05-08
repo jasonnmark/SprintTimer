@@ -215,14 +215,28 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         if let error = error {
             logger.error("Activation failed: \(error)")
         } else {
-            // Initialize applicationContext to prevent "Application context data is nil" warning
-            try? session.updateApplicationContext([:])
+            // Skip applicationContext init when there's no counterpart to talk to — otherwise
+            // WCSession logs the WCErrorCodeWatchAppNotInstalled error chain on every launch
+            // for iOS-only or watchOS-only installs.
+            if shouldUpdateApplicationContext(session: session) {
+                try? session.updateApplicationContext([:])
+            }
 
             // Request full sync on activation
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
                 self?.requestFullSync()
             }
         }
+    }
+
+    private func shouldUpdateApplicationContext(session: WCSession) -> Bool {
+        #if os(iOS)
+        return session.isPaired && session.isWatchAppInstalled
+        #else
+        // watchOS doesn't expose isPaired/isCompanionAppInstalled at this level; assume the
+        // counterpart is reachable via the rest of the WCSession state machine.
+        return true
+        #endif
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String : Any]) {
