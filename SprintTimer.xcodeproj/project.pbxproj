@@ -683,6 +683,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SprintTimer;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Sprint Timer needs to read your heart rate and step data";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Sprint Timer needs to save your workout data to Health";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SprintTimer uses your location during sprints to calculate running distance, pace, and elevation gain.";
@@ -718,6 +719,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SprintTimer;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Sprint Timer needs to read your heart rate and step data";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Sprint Timer needs to save your workout data to Health";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SprintTimer uses your location during sprints to calculate running distance, pace, and elevation gain.";
@@ -754,6 +756,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SprintTimer;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Sprint Timer reads your heart rate and step data to track your sprint performance.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Sprint Timer saves your sprint workouts to Health.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SprintTimer uses your location during sprints to calculate running distance, pace, and elevation gain.";
@@ -791,6 +794,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = SprintTimer;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Sprint Timer reads your heart rate and step data to track your sprint performance.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Sprint Timer saves your sprint workouts to Health.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "SprintTimer uses your location during sprints to calculate running distance, pace, and elevation gain.";
