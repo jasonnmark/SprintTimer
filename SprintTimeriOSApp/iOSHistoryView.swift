@@ -7,12 +7,21 @@ struct iOSHistoryView: View {
     @State private var editMode: EditMode = .inactive
     @State private var selectedRuns = Set<UUID>()
     @State private var selectedDays = Set<Date>()
-    @State private var showingRunNoteEditor = false
-    @State private var showingDayNoteEditor = false
-    @State private var selectedNoteRun: Run?
-    @State private var selectedNoteDate: Date?
-    @State private var selectedTimeRun: Run?
-    @State private var showingTimeEditor = false
+    @State private var activeEditor: ActiveEditor?
+
+    private enum ActiveEditor: Identifiable {
+        case runNotes(Run)
+        case dayNotes(Date)
+        case runTime(Run)
+
+        var id: String {
+            switch self {
+            case .runNotes(let r): return "rn-\(r.id)"
+            case .dayNotes(let d): return "dn-\(d.timeIntervalSince1970)"
+            case .runTime(let r):  return "rt-\(r.id)"
+            }
+        }
+    }
     @Environment(\.scenePhase) var scenePhase
     @State private var lastRefresh = Date()
     @State private var selectedDistance: Int = 0 // 0 = All runs
@@ -120,7 +129,7 @@ struct iOSHistoryView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 // Filter Picker
                 HStack {
@@ -219,8 +228,7 @@ struct iOSHistoryView: View {
                                 toggleDaySelection(dayData.date, runs: allRuns(for: dayData))
                             },
                             onNotesTapped: {
-                                selectedNoteDate = dayData.date
-                                showingDayNoteEditor = true
+                                activeEditor = .dayNotes(dayData.date)
                             },
                             onExpandToggle: {
                                 toggleDay(dayData.date)
@@ -243,14 +251,12 @@ struct iOSHistoryView: View {
                                                 toggleRunSelection(run.id)
                                             },
                                             onNotesTapped: {
-                                                selectedNoteRun = run
-                                                showingRunNoteEditor = true
+                                                activeEditor = .runNotes(run)
                                             }
                                         )
                                         .swipeActions(edge: .leading) {
                                             Button {
-                                                selectedTimeRun = run
-                                                showingTimeEditor = true
+                                                activeEditor = .runTime(run)
                                             } label: {
                                                 Label("Edit Time", systemImage: "stopwatch")
                                             }
@@ -305,19 +311,11 @@ struct iOSHistoryView: View {
                     selectedDays.removeAll()
                 }
             }
-            .sheet(isPresented: $showingRunNoteEditor) {
-                if let run = selectedNoteRun {
-                    RunNoteEditorView(run: run)
-                }
-            }
-            .sheet(isPresented: $showingDayNoteEditor) {
-                if let date = selectedNoteDate {
-                    DayNoteEditorView(date: date)
-                }
-            }
-            .sheet(isPresented: $showingTimeEditor) {
-                if let run = selectedTimeRun {
-                    RunTimeEditorView(run: run)
+            .sheet(item: $activeEditor) { editor in
+                switch editor {
+                case .runNotes(let run): RunNoteEditorView(run: run)
+                case .dayNotes(let date): DayNoteEditorView(date: date)
+                case .runTime(let run): RunTimeEditorView(run: run)
                 }
             }
         }
@@ -738,7 +736,7 @@ struct RunNoteEditorView: View {
     @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Run Details")) {
                     HStack {
@@ -806,7 +804,7 @@ struct DayNoteEditorView: View {
     @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Day Details")) {
                     HStack {
@@ -864,7 +862,7 @@ struct RunTimeEditorView: View {
     @FocusState private var isTextFieldFocused: Bool
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Run Details")) {
                     HStack {
