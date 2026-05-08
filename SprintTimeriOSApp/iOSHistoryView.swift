@@ -241,9 +241,12 @@ struct iOSHistoryView: View {
                         )) {
                             if isDayExpanded(dayData.date) {
                                 ForEach(dayData.locationGroups, id: \.location) { locationGroup in
+                                    let metrics = RunMetric.legend(for: locationGroup.runs)
+
                                     LocationHeaderView(
                                         locationName: locationGroup.location,
-                                        runs: locationGroup.runs
+                                        runs: locationGroup.runs,
+                                        metrics: metrics
                                     )
                                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
 
@@ -252,6 +255,7 @@ struct iOSHistoryView: View {
                                             run: run,
                                             isSelected: selectedRuns.contains(run.id),
                                             editMode: editMode,
+                                            metrics: metrics,
                                             onToggle: {
                                                 toggleRunSelection(run.id)
                                             },
@@ -523,9 +527,70 @@ struct StatCell: View {
     }
 }
 
+// Metric columns displayed in each run row (and as icons in the header above
+// the rows). The fixed `columnWidth` is what makes the header icons line up
+// vertically with the values below — without it, the header `HStack` and the
+// row `HStack` measure independently and drift apart.
+enum RunMetric: Hashable {
+    case actualDistance
+    case heartRate
+    case steps
+    case strideLength
+
+    var icon: String {
+        switch self {
+        case .actualDistance: return "location.fill"
+        case .heartRate:      return "heart.fill"
+        case .steps:          return "figure.walk"
+        case .strideLength:   return "ruler"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .actualDistance: return .blue
+        case .heartRate:      return .red
+        case .steps:          return .green
+        case .strideLength:   return .purple
+        }
+    }
+
+    var columnWidth: CGFloat {
+        switch self {
+        case .actualDistance: return 50
+        case .heartRate:      return 60
+        case .steps:          return 50
+        case .strideLength:   return 45
+        }
+    }
+
+    static let timeColumnWidth: CGFloat = 60
+
+    static func legend(for runs: [Run]) -> [RunMetric] {
+        var legend: [RunMetric] = []
+        if runs.contains(where: { ($0.actualDistance ?? 0) > 0 }) {
+            legend.append(.actualDistance)
+        }
+        if runs.contains(where: {
+            $0.averageHeartRate != nil || $0.maxHeartRate != nil
+                || $0.startHeartRate != nil || $0.endHeartRate != nil
+        }) {
+            legend.append(.heartRate)
+        }
+        if runs.contains(where: { ($0.steps ?? 0) > 0 }) {
+            legend.append(.steps)
+        }
+        if runs.contains(where: { ($0.strideLength ?? 0) > 0 }) {
+            legend.append(.strideLength)
+        }
+        return legend
+    }
+}
+
 struct LocationHeaderView: View {
     let locationName: String
     let runs: [Run]
+    let metrics: [RunMetric]
 
     // Use weather from the first run that has it
     private var weatherRun: Run? {
@@ -560,28 +625,6 @@ struct LocationHeaderView: View {
         guard let alt = weatherRun?.altitude ?? runs.first(where: { $0.altitude != nil })?.altitude else { return nil }
         let feet = alt * 3.28084
         return String(format: "%.0f ft", feet)
-    }
-
-    // Icons for metric columns that appear in the run rows below this header.
-    // Filtered to only the metrics actually present in this group's runs so we
-    // don't show a legend marker for an unused column.
-    private var metricLegend: [(icon: String, color: Color)] {
-        var legend: [(String, Color)] = []
-        if runs.contains(where: { ($0.actualDistance ?? 0) > 0 }) {
-            legend.append(("location.fill", .blue))
-        }
-        if runs.contains(where: {
-            $0.averageHeartRate != nil || $0.maxHeartRate != nil || $0.startHeartRate != nil || $0.endHeartRate != nil
-        }) {
-            legend.append(("heart.fill", .red))
-        }
-        if runs.contains(where: { ($0.steps ?? 0) > 0 }) {
-            legend.append(("figure.walk", .green))
-        }
-        if runs.contains(where: { ($0.strideLength ?? 0) > 0 }) {
-            legend.append(("ruler", .purple))
-        }
-        return legend
     }
 
     var body: some View {
@@ -670,15 +713,19 @@ struct LocationHeaderView: View {
             }
 
             // Column legend for the run rows below — colors match the values in the rows.
-            if !metricLegend.isEmpty {
-                HStack(spacing: 14) {
+            // Each icon sits in the same fixed-width column as the corresponding
+            // value in `RunRowView`, so the header lines up vertically with the data.
+            if !metrics.isEmpty {
+                HStack(spacing: 0) {
                     Image(systemName: "clock")
                         .font(.caption2)
                         .foregroundColor(.gray)
-                    ForEach(metricLegend.indices, id: \.self) { i in
-                        Image(systemName: metricLegend[i].icon)
+                        .frame(width: RunMetric.timeColumnWidth, alignment: .leading)
+                    ForEach(metrics, id: \.self) { metric in
+                        Image(systemName: metric.icon)
                             .font(.caption2)
-                            .foregroundColor(metricLegend[i].color)
+                            .foregroundColor(metric.color)
+                            .frame(width: metric.columnWidth, alignment: .leading)
                     }
                 }
                 .padding(.top, 2)
@@ -692,11 +739,55 @@ struct RunRowView: View {
     let run: Run
     let isSelected: Bool
     let editMode: EditMode
+    let metrics: [RunMetric]
     let onToggle: () -> Void
     let onNotesTapped: () -> Void
-    
+
     private var hasRunNotes: Bool {
         !run.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    @ViewBuilder
+    private func metricCell(_ metric: RunMetric) -> some View {
+        switch metric {
+        case .actualDistance:
+            if let gpsDistance = run.actualDistance, gpsDistance > 0 {
+                Text("\(Int(gpsDistance))m")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+            }
+        case .heartRate:
+            if let avg = run.averageHeartRate {
+                HStack(spacing: 0) {
+                    Text("\(Int(avg))")
+                    if let max = run.maxHeartRate {
+                        Text("/\(Int(max))").opacity(0.7)
+                    }
+                }
+                .font(.caption)
+                .foregroundColor(.red)
+            } else if let end = run.endHeartRate {
+                Text("\(Int(end))")
+                    .font(.caption)
+                    .foregroundColor(.red)
+            } else if let start = run.startHeartRate {
+                Text("\(Int(start))")
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+        case .steps:
+            if let steps = run.steps, steps > 0 {
+                Text("\(steps)")
+                    .font(.caption)
+                    .foregroundColor(.green)
+            }
+        case .strideLength:
+            if let stride = run.strideLength, stride > 0 {
+                Text(String(format: "%.1fm", stride))
+                    .font(.caption)
+                    .foregroundColor(.purple)
+            }
+        }
     }
     
     var body: some View {
@@ -722,46 +813,17 @@ struct RunRowView: View {
                     
                     // Icons appear as a legend in the LocationHeaderView above; values here
                     // stay color-coded to the same palette so each number identifies itself.
-                    HStack(spacing: 10) {
+                    // Each column has a fixed width matching the header, so missing values
+                    // leave a blank space rather than collapsing the row out of alignment.
+                    HStack(spacing: 0) {
                         Text(run.date, style: .time)
                             .font(.caption)
                             .foregroundColor(.gray)
+                            .frame(width: RunMetric.timeColumnWidth, alignment: .leading)
 
-                        if let gpsDistance = run.actualDistance, gpsDistance > 0 {
-                            Text("\(Int(gpsDistance))m")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                        }
-
-                        if let avg = run.averageHeartRate {
-                            HStack(spacing: 0) {
-                                Text("\(Int(avg))")
-                                if let max = run.maxHeartRate {
-                                    Text("/\(Int(max))").opacity(0.7)
-                                }
-                            }
-                            .font(.caption)
-                            .foregroundColor(.red)
-                        } else if let end = run.endHeartRate {
-                            Text("\(Int(end))")
-                                .font(.caption)
-                                .foregroundColor(.red)
-                        } else if let start = run.startHeartRate {
-                            Text("\(Int(start))")
-                                .font(.caption)
-                                .foregroundColor(.red)
-                        }
-
-                        if let steps = run.steps, steps > 0 {
-                            Text("\(steps)")
-                                .font(.caption)
-                                .foregroundColor(.green)
-                        }
-
-                        if let stride = run.strideLength, stride > 0 {
-                            Text(String(format: "%.1fm", stride))
-                                .font(.caption)
-                                .foregroundColor(.purple)
+                        ForEach(metrics, id: \.self) { metric in
+                            metricCell(metric)
+                                .frame(width: metric.columnWidth, alignment: .leading)
                         }
                     }
                 }
