@@ -7,21 +7,28 @@ struct iOSHistoryView: View {
     @State private var editMode: EditMode = .inactive
     @State private var selectedRuns = Set<UUID>()
     @State private var selectedDays = Set<Date>()
-    @State private var showingNoteEditor = false
-    @State private var noteType: NoteType = .run
-    @State private var selectedItem: Any?
-    @State private var selectedNoteRun: Run?
-    @State private var selectedNoteDate: Date?
+    @State private var activeEditor: ActiveEditor?
+
+    private enum ActiveEditor: Identifiable {
+        case runNotes(Run)
+        case dayNotes(Date)
+        case runTime(Run)
+
+        var id: String {
+            switch self {
+            case .runNotes(let r): return "rn-\(r.id)"
+            case .dayNotes(let d): return "dn-\(d.timeIntervalSince1970)"
+            case .runTime(let r):  return "rt-\(r.id)"
+            }
+        }
+    }
     @Environment(\.scenePhase) var scenePhase
     @State private var lastRefresh = Date()
     @State private var selectedDistance: Int = 0 // 0 = All runs
     @State private var expandedDays = Set<Date>()
     @State private var hasInitializedExpansion = false
+    @State private var hasWeatherKey: Bool = WeatherService.shared.hasAPIKey
 
-    enum NoteType {
-        case run, day
-    }
-    
     // Get unique distances from runs
     var availableDistances: [Int] {
         let distances = Set(allRuns.map { $0.distance }).sorted()
@@ -123,8 +130,12 @@ struct iOSHistoryView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
+                if !hasWeatherKey {
+                    weatherKeyPill
+                }
+
                 // Filter Picker
                 HStack {
                     Text("Filter:")
@@ -222,10 +233,7 @@ struct iOSHistoryView: View {
                                 toggleDaySelection(dayData.date, runs: allRuns(for: dayData))
                             },
                             onNotesTapped: {
-                                noteType = .day
-                                selectedItem = dayData.date
-                                selectedNoteDate = dayData.date
-                                showingNoteEditor = true
+                                activeEditor = .dayNotes(dayData.date)
                             },
                             onExpandToggle: {
                                 toggleDay(dayData.date)
@@ -233,9 +241,12 @@ struct iOSHistoryView: View {
                         )) {
                             if isDayExpanded(dayData.date) {
                                 ForEach(dayData.locationGroups, id: \.location) { locationGroup in
+                                    let metrics = RunMetric.legend(for: locationGroup.runs)
+
                                     LocationHeaderView(
                                         locationName: locationGroup.location,
-                                        runs: locationGroup.runs
+                                        runs: locationGroup.runs,
+                                        metrics: metrics
                                     )
                                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
 
@@ -244,16 +255,22 @@ struct iOSHistoryView: View {
                                             run: run,
                                             isSelected: selectedRuns.contains(run.id),
                                             editMode: editMode,
+                                            metrics: metrics,
                                             onToggle: {
                                                 toggleRunSelection(run.id)
                                             },
                                             onNotesTapped: {
-                                                noteType = .run
-                                                selectedItem = run
-                                                selectedNoteRun = run
-                                                showingNoteEditor = true
+                                                activeEditor = .runNotes(run)
                                             }
                                         )
+                                        .swipeActions(edge: .leading) {
+                                            Button {
+                                                activeEditor = .runTime(run)
+                                            } label: {
+                                                Label("Edit Time", systemImage: "stopwatch")
+                                            }
+                                            .tint(.blue)
+                                        }
                                     }
                                     .onDelete { indexSet in
                                         deleteRuns(at: indexSet, from: locationGroup.runs)
@@ -273,6 +290,10 @@ struct iOSHistoryView: View {
             .navigationTitle("Sprint Timer")
             .onAppear {
                 expandMostRecentIfNeeded()
+                hasWeatherKey = WeatherService.shared.hasAPIKey
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("WeatherAPIKeyChanged"))) { _ in
+                hasWeatherKey = WeatherService.shared.hasAPIKey
             }
             .onChange(of: allRuns.count) { _, _ in
                 expandMostRecentIfNeeded()
@@ -303,23 +324,55 @@ struct iOSHistoryView: View {
                     selectedDays.removeAll()
                 }
             }
-            .sheet(isPresented: $showingNoteEditor) {
-                if noteType == .run, let run = selectedNoteRun {
-                    RunNoteEditorView(run: run)
-                } else if noteType == .day, let date = selectedNoteDate {
-                    DayNoteEditorView(date: date)
+            .sheet(item: $activeEditor) { editor in
+                switch editor {
+                case .runNotes(let run): RunNoteEditorView(run: run)
+                case .dayNotes(let date): DayNoteEditorView(date: date)
+                case .runTime(let run): RunTimeEditorView(run: run)
                 }
             }
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
             if newPhase == .active {
                 lastRefresh = Date()
+                hasWeatherKey = WeatherService.shared.hasAPIKey
                 // Request fresh data from Watch when app comes to foreground
                 SyncManager.shared.requestFullSync()
             }
         }
     }
-    
+
+    private var weatherKeyPill: some View {
+        Button {
+            NotificationCenter.default.post(name: Notification.Name("SwitchToSettings"), object: nil)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 14))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Weather isn't being recorded")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Tap to set up your free OpenWeather key")
+                        .font(.caption2)
+                        .opacity(0.85)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .opacity(0.7)
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color.orange)
+            .clipShape(Capsule())
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+        }
+        .buttonStyle(.plain)
+    }
+
     private func toggleDaySelection(_ date: Date, runs: [Run]) {
         if selectedDays.contains(date) {
             selectedDays.remove(date)
@@ -406,8 +459,9 @@ struct DayHeaderView: View {
                                 .foregroundColor(.gray)
                         }
                     }
+                    .contentShape(Rectangle())
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(BorderlessButtonStyle())
 
                 Spacer()
 
@@ -416,8 +470,9 @@ struct DayHeaderView: View {
                         .font(.system(size: 20))
                         .foregroundColor(hasDayNote ? .blue : .gray)
                         .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(PlainButtonStyle())
+                .buttonStyle(BorderlessButtonStyle())
             }
             .padding(.vertical, 4)
 
@@ -472,9 +527,70 @@ struct StatCell: View {
     }
 }
 
+// Metric columns displayed in each run row (and as icons in the header above
+// the rows). The fixed `columnWidth` is what makes the header icons line up
+// vertically with the values below — without it, the header `HStack` and the
+// row `HStack` measure independently and drift apart.
+enum RunMetric: Hashable {
+    case actualDistance
+    case heartRate
+    case steps
+    case strideLength
+
+    var icon: String {
+        switch self {
+        case .actualDistance: return "location.fill"
+        case .heartRate:      return "heart.fill"
+        case .steps:          return "figure.walk"
+        case .strideLength:   return "ruler"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .actualDistance: return .blue
+        case .heartRate:      return .red
+        case .steps:          return .green
+        case .strideLength:   return .purple
+        }
+    }
+
+    var columnWidth: CGFloat {
+        switch self {
+        case .actualDistance: return 50
+        case .heartRate:      return 60
+        case .steps:          return 50
+        case .strideLength:   return 45
+        }
+    }
+
+    static let timeColumnWidth: CGFloat = 60
+
+    static func legend(for runs: [Run]) -> [RunMetric] {
+        var legend: [RunMetric] = []
+        if runs.contains(where: { ($0.actualDistance ?? 0) > 0 }) {
+            legend.append(.actualDistance)
+        }
+        if runs.contains(where: {
+            $0.averageHeartRate != nil || $0.maxHeartRate != nil
+                || $0.startHeartRate != nil || $0.endHeartRate != nil
+        }) {
+            legend.append(.heartRate)
+        }
+        if runs.contains(where: { ($0.steps ?? 0) > 0 }) {
+            legend.append(.steps)
+        }
+        if runs.contains(where: { ($0.strideLength ?? 0) > 0 }) {
+            legend.append(.strideLength)
+        }
+        return legend
+    }
+}
+
 struct LocationHeaderView: View {
     let locationName: String
     let runs: [Run]
+    let metrics: [RunMetric]
 
     // Use weather from the first run that has it
     private var weatherRun: Run? {
@@ -595,6 +711,25 @@ struct LocationHeaderView: View {
                     }
                 }
             }
+
+            // Column legend for the run rows below — colors match the values in the rows.
+            // Each icon sits in the same fixed-width column as the corresponding
+            // value in `RunRowView`, so the header lines up vertically with the data.
+            if !metrics.isEmpty {
+                HStack(spacing: 0) {
+                    Image(systemName: "clock")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                        .frame(width: RunMetric.timeColumnWidth, alignment: .leading)
+                    ForEach(metrics, id: \.self) { metric in
+                        Image(systemName: metric.icon)
+                            .font(.caption2)
+                            .foregroundColor(metric.color)
+                            .frame(width: metric.columnWidth, alignment: .leading)
+                    }
+                }
+                .padding(.top, 2)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -604,11 +739,55 @@ struct RunRowView: View {
     let run: Run
     let isSelected: Bool
     let editMode: EditMode
+    let metrics: [RunMetric]
     let onToggle: () -> Void
     let onNotesTapped: () -> Void
-    
+
     private var hasRunNotes: Bool {
         !run.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    @ViewBuilder
+    private func metricCell(_ metric: RunMetric) -> some View {
+        switch metric {
+        case .actualDistance:
+            if let gpsDistance = run.actualDistance, gpsDistance > 0 {
+                Text("\(Int(gpsDistance))m")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+            }
+        case .heartRate:
+            if let avg = run.averageHeartRate {
+                HStack(spacing: 0) {
+                    Text("\(Int(avg))")
+                    if let max = run.maxHeartRate {
+                        Text("/\(Int(max))").opacity(0.7)
+                    }
+                }
+                .font(.caption)
+                .foregroundColor(.red)
+            } else if let end = run.endHeartRate {
+                Text("\(Int(end))")
+                    .font(.caption)
+                    .foregroundColor(.red)
+            } else if let start = run.startHeartRate {
+                Text("\(Int(start))")
+                    .font(.caption)
+                    .foregroundColor(.red)
+            }
+        case .steps:
+            if let steps = run.steps, steps > 0 {
+                Text("\(steps)")
+                    .font(.caption)
+                    .foregroundColor(.green)
+            }
+        case .strideLength:
+            if let stride = run.strideLength, stride > 0 {
+                Text(String(format: "%.1fm", stride))
+                    .font(.caption)
+                    .foregroundColor(.purple)
+            }
+        }
     }
     
     var body: some View {
@@ -632,51 +811,19 @@ struct RunRowView: View {
                             .fontDesign(.monospaced)
                     }
                     
-                    HStack(spacing: 12) {
+                    // Icons appear as a legend in the LocationHeaderView above; values here
+                    // stay color-coded to the same palette so each number identifies itself.
+                    // Each column has a fixed width matching the header, so missing values
+                    // leave a blank space rather than collapsing the row out of alignment.
+                    HStack(spacing: 0) {
                         Text(run.date, style: .time)
                             .font(.caption)
                             .foregroundColor(.gray)
-                        
-                        if let gpsDistance = run.actualDistance, gpsDistance > 0 {
-                            Label("\(Int(gpsDistance))m", systemImage: "location.fill")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                        }
-                        
-                        if run.averageHeartRate != nil || run.maxHeartRate != nil || run.startHeartRate != nil || run.endHeartRate != nil {
-                            HStack(spacing: 2) {
-                                Image(systemName: "heart.fill")
-                                    .font(.caption)
-                                    .foregroundColor(.red)
-                                if let avg = run.averageHeartRate {
-                                    Text("\(Int(avg))")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
-                                    if let max = run.maxHeartRate {
-                                        Text("/ \(Int(max))")
-                                            .font(.caption)
-                                            .foregroundColor(.red.opacity(0.7))
-                                    }
-                                } else if let end = run.endHeartRate {
-                                    Text("\(Int(end))")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
-                                } else if let start = run.startHeartRate {
-                                    Text("\(Int(start))")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
-                                }
-                            }
-                        }
-                        if let steps = run.steps, steps > 0 {
-                            Label("\(steps)", systemImage: "figure.walk")
-                                .font(.caption)
-                                .foregroundColor(.green)
-                        }
-                        if let stride = run.strideLength, stride > 0 {
-                            Label(String(format: "%.1fm", stride), systemImage: "ruler")
-                                .font(.caption)
-                                .foregroundColor(.purple)
+                            .frame(width: RunMetric.timeColumnWidth, alignment: .leading)
+
+                        ForEach(metrics, id: \.self) { metric in
+                            metricCell(metric)
+                                .frame(width: metric.columnWidth, alignment: .leading)
                         }
                     }
                 }
@@ -726,7 +873,7 @@ struct RunNoteEditorView: View {
     @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Run Details")) {
                     HStack {
@@ -794,7 +941,7 @@ struct DayNoteEditorView: View {
     @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Form {
                 Section(header: Text("Day Details")) {
                     HStack {
@@ -841,5 +988,106 @@ struct DayNoteEditorView: View {
     private func saveDayNotes() {
         dailyNotesManager.setNote(noteText, for: date)
         dismiss()
+    }
+}
+
+struct RunTimeEditorView: View {
+    let run: Run
+    @Environment(\.dismiss) private var dismiss
+    @State private var timeText = ""
+    @State private var errorMessage: String?
+    @FocusState private var isTextFieldFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(header: Text("Run Details")) {
+                    HStack {
+                        Text("Distance:")
+                        Spacer()
+                        Text("\(run.distance)m")
+                    }
+                    HStack {
+                        Text("Date:")
+                        Spacer()
+                        Text(run.formattedDate)
+                    }
+                    HStack {
+                        Text("Original time:")
+                        Spacer()
+                        Text(run.formattedTime)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Section(header: Text("New Time"), footer: Text("Format: 12.345 or 1:23.456")) {
+                    TextField("Time", text: $timeText)
+                        .keyboardType(.decimalPad)
+                        .focused($isTextFieldFocused)
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                }
+            }
+            .navigationTitle("Edit Run Time")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        saveTime()
+                    }
+                    .fontWeight(.medium)
+                    .disabled(parsedInterval(from: timeText) == nil)
+                }
+            }
+            .onAppear {
+                timeText = run.formattedTime
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isTextFieldFocused = true
+                }
+            }
+        }
+    }
+
+    private func parsedInterval(from text: String) -> TimeInterval? {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+
+        // Accept "M:SS.mmm" or "S.mmm" / "SS.mmm"
+        let parts = trimmed.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+        switch parts.count {
+        case 1:
+            guard let seconds = Double(parts[0]), seconds >= 0 else { return nil }
+            return seconds
+        case 2:
+            guard let minutes = Int(parts[0]), minutes >= 0,
+                  let seconds = Double(parts[1]), seconds >= 0, seconds < 60
+            else { return nil }
+            return TimeInterval(minutes) * 60 + seconds
+        default:
+            return nil
+        }
+    }
+
+    private func saveTime() {
+        guard let newInterval = parsedInterval(from: timeText) else {
+            errorMessage = "Enter a valid time like 12.345 or 1:23.456"
+            return
+        }
+        run.elapsedTime = newInterval
+        do {
+            try DataManager.shared.modelContainer.mainContext.save()
+            // Push to watch via the existing upsert path (handleRunAdded updates by ID).
+            let syncData = SyncManager.shared.runToSyncData(run)
+            SyncManager.shared.syncNewRun(syncData)
+            dismiss()
+        } catch {
+            errorMessage = "Save failed: \(error.localizedDescription)"
+        }
     }
 }

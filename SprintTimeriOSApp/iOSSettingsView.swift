@@ -87,6 +87,10 @@ struct iOSSettingsView: View {
                         .autocorrectionDisabled()
                         .onChange(of: weatherAPIKey) { _, newValue in
                             WeatherService.shared.apiKey = newValue
+                            NotificationCenter.default.post(
+                                name: Notification.Name("WeatherAPIKeyChanged"),
+                                object: nil
+                            )
                         }
 
                     if WeatherService.shared.hasAPIKey {

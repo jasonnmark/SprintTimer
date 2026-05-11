@@ -159,6 +159,12 @@ class BackupManager: ObservableObject {
                     runCount: record["runCount"] as? Int ?? 0
                 )
             }
+        } catch let error as CKError where error.code == .invalidArguments {
+            // CloudKit needs an explicit queryable index on the record type before this query
+            // can run. The fix is in CloudKit Dashboard, not in code. Logging at .notice so it
+            // doesn't appear as a red error every launch.
+            logger.notice("Backup list unavailable — CloudKit Dashboard needs the record type's recordName (or backupDate) marked Queryable: \(error.localizedDescription)")
+            return []
         } catch {
             logger.error("Failed to fetch backup list: \(error)")
             return []
