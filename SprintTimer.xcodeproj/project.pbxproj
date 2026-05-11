@@ -104,6 +104,7 @@
 				"SprintTimer Watch AppUITests/SprintTimer_Watch_AppUITests.swift",
 				"SprintTimer Watch AppUITests/SprintTimer_Watch_AppUITestsLaunchTests.swift",
 				SprintTimerTests/SprintTimerTests.swift,
+				SprintTimerUITests/AppIcon.icon,
 				SprintTimerUITests/SprintTimerUITests.swift,
 				SprintTimerUITests/SprintTimerUITestsLaunchTests.swift,
 			);
