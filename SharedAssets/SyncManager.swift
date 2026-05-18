@@ -222,9 +222,13 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         } else {
             // Skip applicationContext init when there's no counterpart to talk to — otherwise
             // WCSession logs the WCErrorCodeWatchAppNotInstalled error chain on every launch
-            // for iOS-only or watchOS-only installs.
+            // for iOS-only or watchOS-only installs. The payload must be non-empty or the
+            // framework logs "Application context data is nil" on the receive side; the
+            // timestamp is unused, real sync flows through sendMessage / transferUserInfo.
             if shouldUpdateApplicationContext(session: session) {
-                try? session.updateApplicationContext([:])
+                try? session.updateApplicationContext([
+                    "activatedAt": Date().timeIntervalSince1970
+                ])
             }
 
             // Request full sync on activation

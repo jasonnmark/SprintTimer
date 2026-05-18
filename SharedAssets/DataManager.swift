@@ -145,7 +145,8 @@ class DataManager: ObservableObject {
     /// Types eligible to assign to a *new* run: built-ins + non-archived customs.
     /// Used by every picker/filter UI.
     var selectableRunTypes: [RunType] {
-        RunType.builtIns + customRunTypes.filter { !$0.isArchived }
+        (RunType.builtIns + customRunTypes.filter { !$0.isArchived })
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     /// Every known type including archived customs. Used for UUID → name lookups
@@ -306,7 +307,7 @@ class DataManager: ObservableObject {
 
         do {
             self.modelContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])
-            logger.info("SwiftData initialized at \(databaseURL.path)")
+            logger.debug("SwiftData initialized at \(databaseURL.path)")
         } catch {
             logger.error("Failed to create ModelContainer: \(error). Attempting database reset...")
 
@@ -318,7 +319,7 @@ class DataManager: ObservableObject {
             // Try again
             do {
                 self.modelContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])
-                logger.info("SwiftData initialized after database reset")
+                logger.debug("SwiftData initialized after database reset")
             } catch {
                 fatalError("Could not create ModelContainer after reset: \(error)")
             }
