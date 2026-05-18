@@ -92,6 +92,17 @@ struct TimerView: View {
                     Text("Get Ready")
                         .font(.system(size: 20))
                         .foregroundColor(.white)
+                    Button {
+                        cancelCountdown()
+                    } label: {
+                        Text("Cancel")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white.opacity(0.7))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.plain)
+                    .handGestureShortcut(.primaryAction)
                 }
             } else if currentMode == .running {
                 // Timer Running
@@ -273,6 +284,14 @@ struct TimerView: View {
         // Reset gesture state
         isInLongPressMode = false
         tapHandled = false
+    }
+
+    private func cancelCountdown() {
+        viewModel.resetTimer()
+        viewMode = .start
+        isInLongPressMode = false
+        tapHandled = false
+        timerStartedButHidden = false
     }
     
     // CHANGED: no QuickBoard here; we ask RunnerView to open the Notes sheet
