@@ -54,6 +54,9 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
             "originalDistance": run.originalRecordedDistance,
             "notes": run.notes
         ]
+        if let typeId = run.runTypeId {
+            data["runTypeId"] = typeId.uuidString
+        }
 
         // Read optional properties explicitly (Mirror doesn't work reliably with SwiftData @Model)
         if let v = run.latitude { data["latitude"] = v }
@@ -396,6 +399,10 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
                 }
                 if let originalDist = runData["originalDistance"] as? Int {
                     run.originalDistance = originalDist
+                }
+                if let typeIdString = runData["runTypeId"] as? String,
+                   let typeId = UUID(uuidString: typeIdString) {
+                    run.runTypeId = typeId
                 }
                 applyOptionalFields(from: runData, to: run)
 

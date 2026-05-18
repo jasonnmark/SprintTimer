@@ -13,10 +13,10 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
-                // Distance Selector - supports built-in + custom types
+                // Run Type Selector - built-in + non-archived custom types
                 Picker("", selection: $selectedDistanceIndex) {
-                    ForEach(Array(dataManager.allDistances.enumerated()), id: \.offset) { index, item in
-                        Text(item.label)
+                    ForEach(Array(dataManager.selectableRunTypes.enumerated()), id: \.offset) { index, type in
+                        Text(type.name)
                             .tag(index)
                             .font(.system(size: 28, weight: .semibold))
                     }
@@ -27,12 +27,14 @@ struct ContentView: View {
                 .labelsHidden()
                 .padding(.top, 20)
                 .onAppear { pickerFocused = true }
-                
+
                 // Start Run Button
                 Button(action: {
-                    let distances = dataManager.allDistances
-                    let safeIndex = min(selectedDistanceIndex, distances.count - 1)
-                    viewModel.selectedDistance = distances[max(0, safeIndex)].distance
+                    let types = dataManager.selectableRunTypes
+                    let safeIndex = min(selectedDistanceIndex, types.count - 1)
+                    let type = types[max(0, safeIndex)]
+                    viewModel.selectedDistance = type.distance
+                    viewModel.selectedRunTypeId = type.id
                     showingRunner = true
                 }) {
                     Text("START")

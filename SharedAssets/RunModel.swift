@@ -45,13 +45,19 @@ final class Run {
     var originalElapsedTime: TimeInterval?
     var originalDistance: Int?
 
-    init(distance: Int, elapsedTime: TimeInterval, notes: String = "", dayNotes: String = "") {
+    /// Foreign key into `DataManager.customRunTypes` or `RunType.builtIns`.
+    /// Optional for legacy rows that predate this field; they fall back to the
+    /// integer distance for display.
+    var runTypeId: UUID?
+
+    init(distance: Int, elapsedTime: TimeInterval, runTypeId: UUID? = nil, notes: String = "", dayNotes: String = "") {
         self.id = UUID()
         self.date = Date()
         self.distance = distance
         self.originalDistance = distance
         self.elapsedTime = elapsedTime
         self.originalElapsedTime = elapsedTime
+        self.runTypeId = runTypeId
         self.notes = notes
         self.dayNotes = dayNotes
     }
@@ -88,5 +94,15 @@ final class Run {
     var pace: String {
         let metersPerSecond = Double(distance) / elapsedTime
         return String(format: "%.1f m/s", metersPerSecond)
+    }
+
+    /// "200m Hurdles" when a type is joined; falls back to "200m" from the
+    /// integer distance for legacy untyped runs. Resolves archived types too.
+    @MainActor
+    func displayLabel(using dataManager: DataManager = .shared) -> String {
+        if let id = runTypeId, let type = dataManager.runType(for: id) {
+            return type.name
+        }
+        return "\(distance)m"
     }
 }

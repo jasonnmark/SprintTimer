@@ -245,6 +245,9 @@ class BackupManager: ObservableObject {
             "originalDistance": run.originalRecordedDistance,
             "notes": run.notes
         ]
+        if let typeId = run.runTypeId {
+            d["runTypeId"] = typeId.uuidString
+        }
 
         if let v = run.actualDistance { d["actualDistance"] = v }
         if let v = run.averageSpeed { d["averageSpeed"] = v }
@@ -305,6 +308,9 @@ class BackupManager: ObservableObject {
                 // backup carries the true originals from a prior recording.
                 if let v = runDict["originalElapsedTime"] as? Double { run.originalElapsedTime = v }
                 if let v = runDict["originalDistance"] as? Int { run.originalDistance = v }
+                if let s = runDict["runTypeId"] as? String, let id = UUID(uuidString: s) {
+                    run.runTypeId = id
+                }
 
                 // Apply all optional fields
                 if let v = runDict["actualDistance"] as? Double { run.actualDistance = v }

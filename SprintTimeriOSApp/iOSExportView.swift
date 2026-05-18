@@ -125,6 +125,8 @@ struct iOSExportView: View {
         let originalDistance: Int
         let elapsedTime: TimeInterval
         let originalElapsedTime: TimeInterval
+        let runTypeId: UUID?
+        let runTypeName: String?
         let formattedTime: String
         let pace: String
         let notes: String
@@ -171,6 +173,8 @@ struct iOSExportView: View {
                 originalDistance: run.originalRecordedDistance,
                 elapsedTime: run.elapsedTime,
                 originalElapsedTime: run.originalRecordedTime,
+                runTypeId: run.runTypeId,
+                runTypeName: run.runTypeId.flatMap { DataManager.shared.runType(for: $0)?.name },
                 formattedTime: run.formattedTime,
                 pace: run.pace,
                 notes: run.notes,
@@ -227,7 +231,7 @@ struct iOSExportView: View {
         // GPS: Latitude, Longitude, Location, Altitude, Alt Gain, GPS Distance, GPS Avg Speed, GPS Stride Length
         // Weather: Condition, Temp, Feels Like, Humidity, Pressure, Wind Speed, Wind Dir (°), Wind Dir, Visibility, UV, Dew Point, AQI
 
-        var csvString = "Date,Time of Day,Day of Week,Distance (m),Original Recorded Distance (m),Elapsed Time (s),Original Recorded Time (s),Avg Speed (m/s)"
+        var csvString = "Date,Time of Day,Day of Week,Run Type,Distance (m),Original Recorded Distance (m),Elapsed Time (s),Original Recorded Time (s),Avg Speed (m/s)"
 
         if includeNotes {
             csvString += ",Run Notes,Day Notes"
@@ -267,9 +271,11 @@ struct iOSExportView: View {
             let avgSpeed = run.elapsedTime > 0 ? Double(run.distance) / run.elapsedTime : 0
 
             // Core data
+            let escapedRunType = (run.runTypeName ?? "").replacingOccurrences(of: "\"", with: "\"\"")
             csvString += "\"\(dateFormatter.string(from: run.date))\","
             csvString += "\"\(timeFormatter.string(from: run.date))\","
             csvString += "\"\(dayFormatter.string(from: run.date))\","
+            csvString += "\"\(escapedRunType)\","
             csvString += "\(run.distance),"
             csvString += "\(run.originalDistance),"
             csvString += "\(String(format: "%.3f", run.elapsedTime)),"
@@ -380,6 +386,12 @@ struct iOSExportView: View {
                 "originalRecordedTime": run.originalElapsedTime,
                 "avgSpeed": avgSpeed
             ]
+            if let id = run.runTypeId {
+                runDict["runTypeId"] = id.uuidString
+            }
+            if let name = run.runTypeName {
+                runDict["runType"] = name
+            }
 
             if includeNotes && !run.notes.isEmpty {
                 runDict["notes"] = run.notes

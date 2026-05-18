@@ -23,24 +23,29 @@ struct iOSHistoryView: View {
         }
     }
     @Environment(\.scenePhase) var scenePhase
+    @ObservedObject private var dataManager = DataManager.shared
     @State private var lastRefresh = Date()
-    @State private var selectedDistance: Int = 0 // 0 = All runs
+    @State private var selectedRunTypeId: UUID? = nil // nil = All runs
     @State private var expandedDays = Set<Date>()
     @State private var hasInitializedExpansion = false
     @State private var hasWeatherKey: Bool = WeatherService.shared.hasAPIKey
 
-    // Get unique distances from runs
-    var availableDistances: [Int] {
-        let distances = Set(allRuns.map { $0.distance }).sorted()
-        return distances
+    /// Selectable types (built-ins + active customs).
+    var filterableTypes: [RunType] {
+        dataManager.selectableRunTypes
     }
-    
-    // Filter runs based on selected distance
+
+    // Filter runs by selected type. Legacy runs without a runTypeId fall through
+    // when their integer distance matches the selected type's canonical distance,
+    // so existing data is still discoverable.
     var filteredRuns: [Run] {
-        if selectedDistance == 0 {
+        guard let id = selectedRunTypeId,
+              let type = dataManager.runType(for: id) else {
             return allRuns
         }
-        return allRuns.filter { $0.distance == selectedDistance }
+        return allRuns.filter { run in
+            run.runTypeId == id || (run.runTypeId == nil && run.distance == type.distance)
+        }
     }
     
     // Group runs by day, then by location within each day
@@ -142,10 +147,10 @@ struct iOSHistoryView: View {
                         .font(.subheadline)
                         .foregroundColor(.gray)
 
-                    Picker("Distance", selection: $selectedDistance) {
-                        Text("All Runs").tag(0)
-                        ForEach(availableDistances, id: \.self) { distance in
-                            Text("\(distance)m").tag(distance)
+                    Picker("Type", selection: $selectedRunTypeId) {
+                        Text("All Runs").tag(UUID?.none)
+                        ForEach(filterableTypes) { type in
+                            Text(type.name).tag(Optional(type.id))
                         }
                     }
                     .pickerStyle(MenuPickerStyle())
@@ -160,7 +165,7 @@ struct iOSHistoryView: View {
                 List {
                     // Stats section
                     Section {
-                        if selectedDistance == 0 {
+                        if selectedRunTypeId == nil {
                             // All runs: just show total count
                             HStack {
                                 Text("\(filteredRuns.count)")
@@ -171,13 +176,15 @@ struct iOSHistoryView: View {
                                     .foregroundColor(.secondary)
                             }
                         } else {
-                            // Specific distance: show count + averages + PB
+                            // Specific type: show count + averages + PB
+                            let typeLabel = selectedRunTypeId
+                                .flatMap { dataManager.runType(for: $0)?.name } ?? "filtered"
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack {
                                     Text("\(filteredRuns.count)")
                                         .font(.title2)
                                         .fontWeight(.bold)
-                                    Text("\(selectedDistance)m runs")
+                                    Text("\(typeLabel) runs")
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
                                 }
@@ -298,7 +305,7 @@ struct iOSHistoryView: View {
             .onChange(of: allRuns.count) { _, _ in
                 expandMostRecentIfNeeded()
             }
-            .onChange(of: selectedDistance) { _, _ in
+            .onChange(of: selectedRunTypeId) { _, _ in
                 expandedDays.removeAll()
                 hasInitializedExpansion = false
                 expandMostRecentIfNeeded()
@@ -803,7 +810,7 @@ struct RunRowView: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text("\(run.distance)m")
+                        Text(run.displayLabel())
                             .font(.subheadline)
                             .foregroundColor(.gray)
                         Text(run.formattedTime)
@@ -869,14 +876,15 @@ struct RunRowView: View {
 struct RunEditorView: View {
     let run: Run
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var dataManager = DataManager.shared
     @State private var noteText = ""
     @State private var editedElapsed: TimeInterval = 0
     @State private var editedDistance: Int = 0
+    @State private var editedRunTypeId: UUID? = nil
     @State private var timeIsValid: Bool = true
     @State private var hasInitialized = false
     @State private var showDeleteConfirm = false
     @State private var isDeleting = false
-    @FocusState private var distanceFocused: Bool
     @FocusState private var notesFocused: Bool
 
     private var formattedEditedTime: String {
@@ -897,22 +905,36 @@ struct RunEditorView: View {
     private var hasUnsavedChanges: Bool {
         editedElapsed != run.elapsedTime
             || editedDistance != run.distance
+            || editedRunTypeId != run.runTypeId
             || noteText != run.notes
+    }
+
+    /// Built-in/custom type that matches a legacy run's integer distance,
+    /// so the picker doesn't start at "Unassigned" for pre-typed-runs data.
+    private var inferredInitialTypeId: UUID? {
+        if let id = run.runTypeId { return id }
+        return dataManager.selectableRunTypes.first { $0.distance == run.distance }?.id
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section(header: Text("Run Details")) {
+                    Picker("Type", selection: $editedRunTypeId) {
+                        if editedRunTypeId != nil
+                            && dataManager.runType(for: editedRunTypeId!) == nil {
+                            // Defensive: type was archived & removed somehow.
+                            Text("(Unknown)").tag(editedRunTypeId)
+                        }
+                        ForEach(dataManager.selectableRunTypes) { type in
+                            Text(type.name).tag(Optional(type.id))
+                        }
+                    }
+                    .pickerStyle(.menu)
                     HStack {
                         Text("Distance:")
                         Spacer()
-                        TextField("0", value: $editedDistance, format: .number)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($distanceFocused)
-                            .frame(maxWidth: 80)
-                        Text("m")
+                        Text("\(editedDistance)m")
                             .foregroundColor(.secondary)
                     }
                     HStack {
@@ -976,7 +998,6 @@ struct RunEditorView: View {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Done") {
-                        distanceFocused = false
                         notesFocused = false
                     }
                 }
@@ -998,7 +1019,15 @@ struct RunEditorView: View {
                 noteText = run.notes
                 editedElapsed = run.elapsedTime
                 editedDistance = run.distance
+                editedRunTypeId = inferredInitialTypeId
                 hasInitialized = true
+            }
+            .onChange(of: editedRunTypeId) { _, newId in
+                // Coupled: picking a type sets the run's distance to that
+                // type's canonical value.
+                if let id = newId, let type = dataManager.runType(for: id) {
+                    editedDistance = type.distance
+                }
             }
         }
         .onDisappear {
@@ -1016,6 +1045,7 @@ struct RunEditorView: View {
 
         run.elapsedTime = editedElapsed
         run.distance = editedDistance
+        run.runTypeId = editedRunTypeId
         run.notes = noteText
 
         do {

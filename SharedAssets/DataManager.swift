@@ -12,18 +12,52 @@ import WidgetKit
 
 private let logger = Logger(subsystem: "com.JasonMark.SprintTimer", category: "DataManager")
 
-// Custom run type for user-defined distances
-struct CustomRunType: Codable, Identifiable, Equatable {
+// A run type (built-in or user-defined). Joined to each Run by `id` so
+// that renaming a custom type propagates retroactively to history.
+struct RunType: Codable, Identifiable, Equatable {
     var id: UUID
     var name: String
     var distance: Int
+    /// Archived types stay in storage so historical runs keep their label
+    /// via UUID lookup, but they're hidden from pickers and filters.
+    var isArchived: Bool
 
-    init(name: String, distance: Int) {
-        self.id = UUID()
+    init(id: UUID = UUID(), name: String, distance: Int, isArchived: Bool = false) {
+        self.id = id
         self.name = name
         self.distance = distance
+        self.isArchived = isArchived
+    }
+
+    // Tolerant decoding so older stored blobs (before `isArchived`) read cleanly.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UUID.self, forKey: .id)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.distance = try c.decode(Int.self, forKey: .distance)
+        self.isArchived = (try? c.decode(Bool.self, forKey: .isArchived)) ?? false
     }
 }
+
+extension RunType {
+    static let oneHundred = RunType(
+        id: UUID(uuidString: "00000000-0000-0000-0000-000000000100")!,
+        name: "100m", distance: 100
+    )
+    static let twoHundred = RunType(
+        id: UUID(uuidString: "00000000-0000-0000-0000-000000000200")!,
+        name: "200m", distance: 200
+    )
+    static let fourHundred = RunType(
+        id: UUID(uuidString: "00000000-0000-0000-0000-000000000400")!,
+        name: "400m", distance: 400
+    )
+    static let builtIns: [RunType] = [.oneHundred, .twoHundred, .fourHundred]
+    var isBuiltIn: Bool { Self.builtIns.contains { $0.id == id } }
+}
+
+// Back-compat alias so any external references compile while we transition.
+typealias CustomRunType = RunType
 
 // Add this file to BOTH iPhone and Watch targets
 enum StartMode: String, CaseIterable {
@@ -94,8 +128,9 @@ class DataManager: ObservableObject {
         }
     }
 
-    // Custom run types
-    @Published var customRunTypes: [CustomRunType] = [] {
+    // Custom run types (active + archived). Archived rows stay in this list
+    // so historical Run records keep resolving their name via UUID lookup.
+    @Published var customRunTypes: [RunType] = [] {
         didSet {
             guard !isInitializing else { return }
             saveCustomRunTypes()
@@ -107,17 +142,61 @@ class DataManager: ObservableObject {
         }
     }
 
-    // All available distances (built-in + custom)
-    var allDistances: [(label: String, distance: Int)] {
-        var result: [(label: String, distance: Int)] = [
-            ("100m", 100),
-            ("200m", 200),
-            ("400m", 400)
-        ]
-        for custom in customRunTypes {
-            result.append((custom.name, custom.distance))
-        }
-        return result
+    /// Types eligible to assign to a *new* run: built-ins + non-archived customs.
+    /// Used by every picker/filter UI.
+    var selectableRunTypes: [RunType] {
+        RunType.builtIns + customRunTypes.filter { !$0.isArchived }
+    }
+
+    /// Every known type including archived customs. Used for UUID → name lookups
+    /// when displaying history, exports, etc.
+    var allRunTypesIncludingArchived: [RunType] {
+        RunType.builtIns + customRunTypes
+    }
+
+    /// Resolve a `RunType` from any UUID, including archived ones.
+    func runType(for id: UUID) -> RunType? {
+        allRunTypesIncludingArchived.first { $0.id == id }
+    }
+
+    // MARK: - Custom Run Type CRUD
+
+    /// Append a new custom type. Returns the created record.
+    @discardableResult
+    func addCustomType(name: String, distance: Int) -> RunType {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let type = RunType(name: trimmed, distance: max(1, distance))
+        customRunTypes.append(type)
+        return type
+    }
+
+    /// Rename a custom type (built-ins are immutable). Retroactive across history
+    /// because Run records reference by UUID — display joins on lookup.
+    func renameCustomType(id: UUID, to newName: String) {
+        guard let idx = customRunTypes.firstIndex(where: { $0.id == id }) else { return }
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        customRunTypes[idx].name = trimmed
+    }
+
+    /// Flip the archived flag. Archive hides the type from pickers/filters but
+    /// preserves it for lookup. Built-ins cannot be archived.
+    func archiveCustomType(id: UUID) {
+        guard let idx = customRunTypes.firstIndex(where: { $0.id == id }) else { return }
+        customRunTypes[idx].isArchived = true
+    }
+
+    func unarchiveCustomType(id: UUID) {
+        guard let idx = customRunTypes.firstIndex(where: { $0.id == id }) else { return }
+        customRunTypes[idx].isArchived = false
+    }
+
+    /// How many runs reference a given type. Used for the archive-warning UX.
+    @MainActor
+    func runsReferencing(typeId: UUID) -> Int {
+        let descriptor = FetchDescriptor<Run>()
+        guard let runs = try? modelContainer.mainContext.fetch(descriptor) else { return 0 }
+        return runs.filter { $0.runTypeId == typeId }.count
     }
 
     // Settings Properties

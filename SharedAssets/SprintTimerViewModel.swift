@@ -30,6 +30,9 @@ class SprintTimerViewModel: NSObject, ObservableObject {
 
     // Run Data
     @Published var selectedDistance = 100
+    /// Type the user has selected to record. Built-in 100m by default so a
+    /// fresh install still tags new runs.
+    @Published var selectedRunTypeId: UUID? = RunType.oneHundred.id
     @Published var dailyNotes = ""
     @Published var currentRunNotes = ""
     @Published var currentEditingRun: Run? // For editing existing run notes from history
@@ -473,7 +476,12 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         }
 
         // Create new run
-        let run = Run(distance: self.selectedDistance, elapsedTime: elapsedTime, notes: combinedNotes)
+        let run = Run(
+            distance: self.selectedDistance,
+            elapsedTime: elapsedTime,
+            runTypeId: self.selectedRunTypeId,
+            notes: combinedNotes
+        )
 
         // Add location data if available
         if let location = currentLocation {

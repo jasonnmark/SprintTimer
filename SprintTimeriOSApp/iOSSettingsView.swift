@@ -12,7 +12,19 @@ struct iOSSettingsView: View {
     @State private var availableBackups: [BackupManager.BackupInfo] = []
     @State private var weatherAPIKey = ""
     @State private var isHealthConnected = false
+    @State private var addingRunType = false
+    @State private var renamingRunType: RunType? = nil
+    @State private var archiveCandidate: RunType? = nil
+    @State private var archiveOrphanCount: Int = 0
     private let healthStore = HKHealthStore()
+
+    private var activeCustomTypes: [RunType] {
+        dataManager.customRunTypes.filter { !$0.isArchived }
+    }
+
+    private var archivedCustomTypes: [RunType] {
+        dataManager.customRunTypes.filter { $0.isArchived }
+    }
 
     var body: some View {
         NavigationView {
@@ -48,7 +60,73 @@ struct iOSSettingsView: View {
                         .font(.caption)
                         .foregroundColor(.gray)
                 }
-                
+
+                Section(header: Text("Run Types"), footer: Text("Renaming a custom type updates every past run that uses it. Archiving keeps history intact but hides the type from the picker.")) {
+                    ForEach(RunType.builtIns) { type in
+                        HStack {
+                            Text(type.name)
+                            Spacer()
+                            Text("\(type.distance)m")
+                                .foregroundColor(.secondary)
+                            Text("Built in")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(Color.secondary.opacity(0.4))
+                                )
+                        }
+                    }
+                    ForEach(activeCustomTypes) { type in
+                        Button {
+                            renamingRunType = type
+                        } label: {
+                            HStack {
+                                Text(type.name)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                Text("\(type.distance)m")
+                                    .foregroundColor(.secondary)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                archiveOrphanCount = dataManager.runsReferencing(typeId: type.id)
+                                archiveCandidate = type
+                            } label: {
+                                Label("Archive", systemImage: "archivebox")
+                            }
+                        }
+                    }
+                    Button {
+                        addingRunType = true
+                    } label: {
+                        Label("Add Custom Type", systemImage: "plus.circle")
+                    }
+                }
+
+                if !archivedCustomTypes.isEmpty {
+                    Section(header: Text("Archived Types"), footer: Text("Past runs that use these types still display their name. Unarchive to make a type selectable again.")) {
+                        ForEach(archivedCustomTypes) { type in
+                            HStack {
+                                Text(type.name)
+                                Spacer()
+                                Text("\(type.distance)m")
+                                    .foregroundColor(.secondary)
+                                Button("Unarchive") {
+                                    dataManager.unarchiveCustomType(id: type.id)
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                    }
+                }
+
                 Section(header: Text("Data Collection")) {
                     Toggle("GPS Verification", isOn: $dataManager.useGPS)
                         .onChange(of: dataManager.useGPS) { _, _ in Task { await updateDebugInfo() } }
@@ -290,6 +368,39 @@ struct iOSSettingsView: View {
         .sheet(isPresented: $showingRestoreSheet) {
             RestoreBackupView(backups: availableBackups)
         }
+        .sheet(isPresented: $addingRunType) {
+            AddRunTypeSheet { name, distance in
+                dataManager.addCustomType(name: name, distance: distance)
+            }
+        }
+        .sheet(item: $renamingRunType) { type in
+            RenameRunTypeSheet(type: type) { newName in
+                dataManager.renameCustomType(id: type.id, to: newName)
+            }
+        }
+        .confirmationDialog(
+            archiveCandidate.map { "Archive \"\($0.name)\"?" } ?? "Archive?",
+            isPresented: Binding(
+                get: { archiveCandidate != nil },
+                set: { if !$0 { archiveCandidate = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: archiveCandidate
+        ) { type in
+            Button("Archive", role: .destructive) {
+                dataManager.archiveCustomType(id: type.id)
+                archiveCandidate = nil
+            }
+            Button("Cancel", role: .cancel) {
+                archiveCandidate = nil
+            }
+        } message: { _ in
+            if archiveOrphanCount > 0 {
+                Text("\(archiveOrphanCount) past run\(archiveOrphanCount == 1 ? "" : "s") use this type. They'll keep their label, but you won't be able to assign new runs to it.")
+            } else {
+                Text("You won't be able to assign new runs to this type. It'll move to Archived Types.")
+            }
+        }
     }
     
     private func checkHealthStatus() {
@@ -506,6 +617,126 @@ struct RestoreBackupView: View {
                 Button("OK") { dismiss() }
             } message: {
                 Text("Your data has been restored from the backup.")
+            }
+        }
+    }
+}
+
+// MARK: - Run Type sheets
+
+private struct AddRunTypeSheet: View {
+    let onSave: (String, Int) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String = ""
+    @State private var distanceText: String = ""
+    @FocusState private var nameFocused: Bool
+
+    private var parsedDistance: Int? {
+        let digits = distanceText.filter { $0.isNumber }
+        guard let value = Int(digits), value > 0 else { return nil }
+        return value
+    }
+
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty && parsedDistance != nil
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(header: Text("Name")) {
+                    TextField("e.g. 200m Hurdles", text: $name)
+                        .focused($nameFocused)
+                }
+                Section(header: Text("Distance"), footer: Text("Distance is fixed once the type is created. To change it later, archive this type and add a new one.")) {
+                    HStack {
+                        TextField("0", text: $distanceText)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                        Text("m").foregroundColor(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("New Run Type")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Add") {
+                        if let d = parsedDistance {
+                            onSave(name, d)
+                            dismiss()
+                        }
+                    }
+                    .fontWeight(.medium)
+                    .disabled(!canSave)
+                }
+            }
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    nameFocused = true
+                }
+            }
+        }
+    }
+}
+
+private struct RenameRunTypeSheet: View {
+    let type: RunType
+    let onSave: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @FocusState private var nameFocused: Bool
+
+    init(type: RunType, onSave: @escaping (String) -> Void) {
+        self.type = type
+        self.onSave = onSave
+        _name = State(initialValue: type.name)
+    }
+
+    private var canSave: Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        return !trimmed.isEmpty && trimmed != type.name
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(header: Text("Name"), footer: Text("Renaming updates every past run that uses this type.")) {
+                    TextField("Name", text: $name)
+                        .focused($nameFocused)
+                }
+                Section(header: Text("Distance")) {
+                    HStack {
+                        Text("\(type.distance)m")
+                        Spacer()
+                        Text("Not editable")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("Rename Type")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        onSave(name)
+                        dismiss()
+                    }
+                    .fontWeight(.medium)
+                    .disabled(!canSave)
+                }
+            }
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    nameFocused = true
+                }
             }
         }
     }
