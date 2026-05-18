@@ -326,7 +326,7 @@ struct iOSHistoryView: View {
             }
             .sheet(item: $activeEditor) { editor in
                 switch editor {
-                case .runNotes(let run): RunNoteEditorView(run: run)
+                case .runNotes(let run): RunEditorView(run: run)
                 case .dayNotes(let date): DayNoteEditorView(date: date)
                 case .runTime(let run): RunTimeEditorView(run: run)
                 }
@@ -866,12 +866,40 @@ struct RunRowView: View {
     }
 }
 
-struct RunNoteEditorView: View {
+struct RunEditorView: View {
     let run: Run
     @Environment(\.dismiss) private var dismiss
     @State private var noteText = ""
-    @FocusState private var isTextFieldFocused: Bool
-    
+    @State private var editedElapsed: TimeInterval = 0
+    @State private var editedDistance: Int = 0
+    @State private var timeIsValid: Bool = true
+    @State private var hasInitialized = false
+    @State private var showDeleteConfirm = false
+    @State private var isDeleting = false
+    @FocusState private var distanceFocused: Bool
+    @FocusState private var notesFocused: Bool
+
+    private var formattedEditedTime: String {
+        let minutes = Int(editedElapsed) / 60
+        let seconds = Int(editedElapsed) % 60
+        let ms = Int((editedElapsed.truncatingRemainder(dividingBy: 1)) * 1000)
+        if minutes > 0 {
+            return String(format: "%d:%02d.%03d", minutes, seconds, ms)
+        } else {
+            return String(format: "%d.%03d", seconds, ms)
+        }
+    }
+
+    private var canSave: Bool {
+        timeIsValid && editedElapsed > 0 && editedDistance > 0
+    }
+
+    private var hasUnsavedChanges: Bool {
+        editedElapsed != run.elapsedTime
+            || editedDistance != run.distance
+            || noteText != run.notes
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -879,12 +907,35 @@ struct RunNoteEditorView: View {
                     HStack {
                         Text("Distance:")
                         Spacer()
-                        Text("\(run.distance)m")
+                        TextField("0", value: $editedDistance, format: .number)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .focused($distanceFocused)
+                            .frame(maxWidth: 80)
+                        Text("m")
+                            .foregroundColor(.secondary)
                     }
                     HStack {
-                        Text("Time:")
+                        Text("Original Recorded Distance:")
                         Spacer()
-                        Text(run.formattedTime)
+                        Text("\(run.originalRecordedDistance)m")
+                            .foregroundColor(.secondary)
+                    }
+                    NavigationLink {
+                        PushedTimeEditor(elapsed: $editedElapsed, isValid: $timeIsValid)
+                    } label: {
+                        HStack {
+                            Text("Time:")
+                            Spacer()
+                            Text(formattedEditedTime)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    HStack {
+                        Text("Original Recorded Time:")
+                        Spacer()
+                        Text(run.formattedOriginalRecordedTime)
+                            .foregroundColor(.secondary)
                     }
                     HStack {
                         Text("Date:")
@@ -892,44 +943,115 @@ struct RunNoteEditorView: View {
                         Text(run.formattedDate)
                     }
                 }
-                
+
                 Section(header: Text("Notes")) {
                     TextEditor(text: $noteText)
                         .frame(minHeight: 100)
-                        .focused($isTextFieldFocused)
+                        .focused($notesFocused)
                         .scrollContentBackground(.hidden)
                 }
+
+                Section {
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text("Delete Run")
+                            Spacer()
+                        }
+                    }
+                }
             }
-            .navigationTitle("Run Notes")
+            .navigationTitle("Edit Run")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        saveNotes()
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .fontWeight(.medium)
+                    .disabled(!canSave)
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        distanceFocused = false
+                        notesFocused = false
+                    }
+                }
+            }
+            .confirmationDialog(
+                "Delete this run?",
+                isPresented: $showDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Delete Run", role: .destructive) {
+                    deleteRun()
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("This run will be removed from history. This can't be undone.")
+            }
+            .onAppear {
+                guard !hasInitialized else { return }
+                noteText = run.notes
+                editedElapsed = run.elapsedTime
+                editedDistance = run.distance
+                hasInitialized = true
+            }
+        }
+        .onDisappear {
+            guard !isDeleting, canSave, hasUnsavedChanges else { return }
+            save()
+        }
+    }
+
+    private func save() {
+        // Backfill originals for legacy runs that predate these fields. The pre-edit
+        // value is the best approximation of "original recorded" we have. After the
+        // first save, these stay locked in regardless of future edits.
+        if run.originalElapsedTime == nil { run.originalElapsedTime = run.elapsedTime }
+        if run.originalDistance == nil { run.originalDistance = run.distance }
+
+        run.elapsedTime = editedElapsed
+        run.distance = editedDistance
+        run.notes = noteText
+
+        do {
+            try DataManager.shared.modelContainer.mainContext.save()
+            let syncData = SyncManager.shared.runToSyncData(run)
+            SyncManager.shared.syncNewRun(syncData)
+        } catch {
+            // Save failed
+        }
+    }
+
+    private func deleteRun() {
+        isDeleting = true
+        DataManager.shared.deleteRun(run)
+        dismiss()
+    }
+}
+
+private struct PushedTimeEditor: View {
+    @Binding var elapsed: TimeInterval
+    @Binding var isValid: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        SegmentedTimeEditor(elapsed: $elapsed, isValid: $isValid)
+            .navigationTitle("Edit Time")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(true)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
                     }
                     .fontWeight(.medium)
                 }
             }
-            .onAppear {
-                noteText = run.notes
-                
-                // Focus the text field after a short delay
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    isTextFieldFocused = true
-                }
-            }
-        }
-    }
-    
-    private func saveNotes() {
-        run.notes = noteText
-        
-        do {
-            try DataManager.shared.modelContainer.mainContext.save()
-            dismiss()
-        } catch {
-            // Note save failed
-        }
     }
 }
 
@@ -994,9 +1116,17 @@ struct DayNoteEditorView: View {
 struct RunTimeEditorView: View {
     let run: Run
     @Environment(\.dismiss) private var dismiss
-    @State private var timeText = ""
-    @State private var errorMessage: String?
-    @FocusState private var isTextFieldFocused: Bool
+    @State private var editedElapsed: TimeInterval = 0
+    @State private var isValid: Bool = true
+    @State private var hasInitialized = false
+
+    private var canSave: Bool {
+        isValid && editedElapsed > 0
+    }
+
+    private var hasUnsavedChanges: Bool {
+        editedElapsed != run.elapsedTime
+    }
 
     var body: some View {
         NavigationStack {
@@ -1013,81 +1143,52 @@ struct RunTimeEditorView: View {
                         Text(run.formattedDate)
                     }
                     HStack {
-                        Text("Original time:")
+                        Text("Original Recorded Time:")
                         Spacer()
-                        Text(run.formattedTime)
+                        Text(run.formattedOriginalRecordedTime)
                             .foregroundColor(.secondary)
                     }
                 }
 
-                Section(header: Text("New Time"), footer: Text("Format: 12.345 or 1:23.456")) {
-                    TextField("Time", text: $timeText)
-                        .keyboardType(.decimalPad)
-                        .focused($isTextFieldFocused)
-                    if let errorMessage {
-                        Text(errorMessage)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                    }
+                Section(header: Text("New Time")) {
+                    SegmentedTimeEditor(elapsed: $editedElapsed, isValid: $isValid)
                 }
             }
             .navigationTitle("Edit Run Time")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        saveTime()
+                    Button("Done") {
+                        dismiss()
                     }
                     .fontWeight(.medium)
-                    .disabled(parsedInterval(from: timeText) == nil)
+                    .disabled(!canSave)
                 }
             }
             .onAppear {
-                timeText = run.formattedTime
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    isTextFieldFocused = true
-                }
+                guard !hasInitialized else { return }
+                editedElapsed = run.elapsedTime
+                hasInitialized = true
             }
         }
-    }
-
-    private func parsedInterval(from text: String) -> TimeInterval? {
-        let trimmed = text.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return nil }
-
-        // Accept "M:SS.mmm" or "S.mmm" / "SS.mmm"
-        let parts = trimmed.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
-        switch parts.count {
-        case 1:
-            guard let seconds = Double(parts[0]), seconds >= 0 else { return nil }
-            return seconds
-        case 2:
-            guard let minutes = Int(parts[0]), minutes >= 0,
-                  let seconds = Double(parts[1]), seconds >= 0, seconds < 60
-            else { return nil }
-            return TimeInterval(minutes) * 60 + seconds
-        default:
-            return nil
+        .onDisappear {
+            guard canSave, hasUnsavedChanges else { return }
+            saveTime()
         }
     }
 
     private func saveTime() {
-        guard let newInterval = parsedInterval(from: timeText) else {
-            errorMessage = "Enter a valid time like 12.345 or 1:23.456"
-            return
-        }
-        run.elapsedTime = newInterval
+        // Backfill original for legacy runs that predate this field.
+        if run.originalElapsedTime == nil { run.originalElapsedTime = run.elapsedTime }
+
+        run.elapsedTime = editedElapsed
         do {
             try DataManager.shared.modelContainer.mainContext.save()
             // Push to watch via the existing upsert path (handleRunAdded updates by ID).
             let syncData = SyncManager.shared.runToSyncData(run)
             SyncManager.shared.syncNewRun(syncData)
-            dismiss()
         } catch {
-            errorMessage = "Save failed: \(error.localizedDescription)"
+            // Save failed
         }
     }
 }

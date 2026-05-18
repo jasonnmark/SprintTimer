@@ -122,7 +122,9 @@ struct iOSExportView: View {
         let id: UUID
         let date: Date
         let distance: Int
+        let originalDistance: Int
         let elapsedTime: TimeInterval
+        let originalElapsedTime: TimeInterval
         let formattedTime: String
         let pace: String
         let notes: String
@@ -166,7 +168,9 @@ struct iOSExportView: View {
                 id: run.id,
                 date: run.date,
                 distance: run.distance,
+                originalDistance: run.originalRecordedDistance,
                 elapsedTime: run.elapsedTime,
+                originalElapsedTime: run.originalRecordedTime,
                 formattedTime: run.formattedTime,
                 pace: run.pace,
                 notes: run.notes,
@@ -223,7 +227,7 @@ struct iOSExportView: View {
         // GPS: Latitude, Longitude, Location, Altitude, Alt Gain, GPS Distance, GPS Avg Speed, GPS Stride Length
         // Weather: Condition, Temp, Feels Like, Humidity, Pressure, Wind Speed, Wind Dir (°), Wind Dir, Visibility, UV, Dew Point, AQI
 
-        var csvString = "Date,Time of Day,Day of Week,Distance (m),Elapsed Time (s),Avg Speed (m/s)"
+        var csvString = "Date,Time of Day,Day of Week,Distance (m),Original Recorded Distance (m),Elapsed Time (s),Original Recorded Time (s),Avg Speed (m/s)"
 
         if includeNotes {
             csvString += ",Run Notes,Day Notes"
@@ -267,7 +271,9 @@ struct iOSExportView: View {
             csvString += "\"\(timeFormatter.string(from: run.date))\","
             csvString += "\"\(dayFormatter.string(from: run.date))\","
             csvString += "\(run.distance),"
+            csvString += "\(run.originalDistance),"
             csvString += "\(String(format: "%.3f", run.elapsedTime)),"
+            csvString += "\(String(format: "%.3f", run.originalElapsedTime)),"
             csvString += "\(String(format: "%.2f", avgSpeed))"
 
             if includeNotes {
@@ -369,7 +375,9 @@ struct iOSExportView: View {
                 "id": run.id.uuidString,
                 "date": dateFormatter.string(from: run.date),
                 "distance": run.distance,
+                "originalRecordedDistance": run.originalDistance,
                 "elapsedTime": run.elapsedTime,
+                "originalRecordedTime": run.originalElapsedTime,
                 "avgSpeed": avgSpeed
             ]
 

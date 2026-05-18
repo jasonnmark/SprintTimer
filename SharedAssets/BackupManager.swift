@@ -241,6 +241,8 @@ class BackupManager: ObservableObject {
             "date": ISO8601DateFormatter().string(from: run.date),
             "distance": run.distance,
             "elapsedTime": run.elapsedTime,
+            "originalElapsedTime": run.originalRecordedTime,
+            "originalDistance": run.originalRecordedDistance,
             "notes": run.notes
         ]
 
@@ -297,6 +299,12 @@ class BackupManager: ObservableObject {
                 let notes = runDict["notes"] as? String ?? ""
                 let run = Run(distance: distance, elapsedTime: elapsedTime, notes: notes)
                 run.date = date
+
+                // Restore originally recorded values from the backup if present.
+                // The init already captured the passed values; override here when the
+                // backup carries the true originals from a prior recording.
+                if let v = runDict["originalElapsedTime"] as? Double { run.originalElapsedTime = v }
+                if let v = runDict["originalDistance"] as? Int { run.originalDistance = v }
 
                 // Apply all optional fields
                 if let v = runDict["actualDistance"] as? Double { run.actualDistance = v }

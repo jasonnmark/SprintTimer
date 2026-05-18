@@ -50,6 +50,8 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
             "date": run.date.timeIntervalSince1970,
             "distance": run.distance,
             "elapsedTime": run.elapsedTime,
+            "originalElapsedTime": run.originalRecordedTime,
+            "originalDistance": run.originalRecordedDistance,
             "notes": run.notes
         ]
 
@@ -373,7 +375,8 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
 
             let runToEnrich: Run
             if let existingRun {
-                // Update existing run with any new enriched fields (location, HR, weather)
+                // Update existing run with any new enriched fields (location, HR, weather).
+                // Original recorded values are immutable — never overwrite them on update.
                 logger.info("handleRunAdded: updating existing run with enriched data")
                 applyOptionalFields(from: runData, to: existingRun)
                 if !notes.isEmpty && existingRun.notes.isEmpty {
@@ -385,6 +388,15 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
             } else {
                 let run = Run(distance: distance, elapsedTime: elapsedTime, notes: notes)
                 run.date = date
+                // Honor explicit originals from the sender (preserves the true recorded values
+                // when the run has already been edited on the other device). If absent, the
+                // init already captured the passed values, which is a reasonable fallback.
+                if let originalTime = runData["originalElapsedTime"] as? Double {
+                    run.originalElapsedTime = originalTime
+                }
+                if let originalDist = runData["originalDistance"] as? Int {
+                    run.originalDistance = originalDist
+                }
                 applyOptionalFields(from: runData, to: run)
 
                 context.insert(run)

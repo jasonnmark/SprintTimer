@@ -39,35 +39,52 @@ final class Run {
     var dewPoint: Double?
     var aqi: Int?
     var weatherCondition: String?
-    
+
+    // Originally recorded values — captured at sprint completion, never edited.
+    // Optional for backward compatibility with rows created before this field existed.
+    var originalElapsedTime: TimeInterval?
+    var originalDistance: Int?
+
     init(distance: Int, elapsedTime: TimeInterval, notes: String = "", dayNotes: String = "") {
         self.id = UUID()
         self.date = Date()
         self.distance = distance
+        self.originalDistance = distance
         self.elapsedTime = elapsedTime
+        self.originalElapsedTime = elapsedTime
         self.notes = notes
         self.dayNotes = dayNotes
     }
-    
-    var formattedTime: String {
-        let minutes = Int(elapsedTime) / 60
-        let seconds = Int(elapsedTime) % 60
-        let milliseconds = Int((elapsedTime.truncatingRemainder(dividingBy: 1)) * 1000)
-        
+
+    /// Falls back to current `elapsedTime` for legacy rows that predate `originalElapsedTime`.
+    var originalRecordedTime: TimeInterval { originalElapsedTime ?? elapsedTime }
+
+    /// Falls back to current `distance` for legacy rows that predate `originalDistance`.
+    var originalRecordedDistance: Int { originalDistance ?? distance }
+
+    var formattedTime: String { Run.formatTime(elapsedTime) }
+
+    var formattedOriginalRecordedTime: String { Run.formatTime(originalRecordedTime) }
+
+    static func formatTime(_ interval: TimeInterval) -> String {
+        let minutes = Int(interval) / 60
+        let seconds = Int(interval) % 60
+        let milliseconds = Int((interval.truncatingRemainder(dividingBy: 1)) * 1000)
+
         if minutes > 0 {
             return String(format: "%d:%02d.%03d", minutes, seconds, milliseconds)
         } else {
             return String(format: "%d.%03d", seconds, milliseconds)
         }
     }
-    
+
     var formattedDate: String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
     }
-    
+
     var pace: String {
         let metersPerSecond = Double(distance) / elapsedTime
         return String(format: "%.1f m/s", metersPerSecond)
