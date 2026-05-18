@@ -92,17 +92,6 @@ struct TimerView: View {
                     Text("Get Ready")
                         .font(.system(size: 20))
                         .foregroundColor(.white)
-                    Button {
-                        cancelCountdown()
-                    } label: {
-                        Text("Cancel")
-                            .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.7))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 4)
-                    }
-                    .buttonStyle(.plain)
-                    .handGestureShortcut(.primaryAction)
                 }
             } else if currentMode == .running {
                 // Timer Running
@@ -137,6 +126,18 @@ struct TimerView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)
+
+                        // Double Tap hook: hands-free stop for the finish line.
+                        // Screen tap continues to work on every watch — this is purely additive.
+                        Button {
+                            handleStopRunGesture()
+                        } label: {
+                            Text("Tap or pinch to stop")
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.55))
+                        }
+                        .buttonStyle(.plain)
+                        .handGestureShortcut(.primaryAction)
                     }
                 }
             }
@@ -174,6 +175,7 @@ struct TimerView: View {
                 .cornerRadius(12)
             }
             .buttonStyle(PlainButtonStyle())
+            .handGestureShortcut(.primaryAction)
             .padding(.horizontal, 0)
 
             Button(action: { saveWithNotes() }) {
@@ -286,12 +288,25 @@ struct TimerView: View {
         tapHandled = false
     }
 
-    private func cancelCountdown() {
-        viewModel.resetTimer()
-        viewMode = .start
+    /// Shared stop-the-run flow, callable from either the screen tap gesture or
+    /// the Double Tap primary-action Button. Uses `Date()` implicitly via
+    /// `viewModel.stopRun(...)` — no offset cheating.
+    private func handleStopRunGesture() {
+        guard currentMode == .running else { return }
+
+        let result = viewModel.stopRun(modelContext: modelContext)
+        pendingStopWasOutlier = result.isOutlier
+        savedElapsedTime = viewModel.elapsedTime
+
+        if result.isOutlier {
+            outlierReason = result.reason
+            viewMode = .outlierAlert
+        } else {
+            viewMode = .actionMenu
+        }
+
         isInLongPressMode = false
         tapHandled = false
-        timerStartedButHidden = false
     }
     
     // CHANGED: no QuickBoard here; we ask RunnerView to open the Notes sheet
@@ -340,22 +355,7 @@ struct TimerView: View {
                         menuWorkItem = work
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: work)
                     } else if currentMode == .running {
-                        // Stop and check for outlier
-                        let result = viewModel.stopRun(modelContext: modelContext)
-                        pendingStopWasOutlier = result.isOutlier
-                        savedElapsedTime = viewModel.elapsedTime
-                        
-                        if result.isOutlier {
-                            outlierReason = result.reason
-                            viewMode = .outlierAlert
-                        } else {
-                            // Normal flow - show action menu
-                            viewMode = .actionMenu
-                        }
-                        
-                        // Reset press state
-                        isInLongPressMode = false
-                        tapHandled = false
+                        handleStopRunGesture()
                     }
                 }
             }
