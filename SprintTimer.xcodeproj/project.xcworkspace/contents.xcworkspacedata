@@ -4,7 +4,4 @@
    <FileRef
       location = "self:">
    </FileRef>
-   <FileRef
-      location = "group:WatchTextInput 2.swift">
-   </FileRef>
 </Workspace>
