@@ -107,9 +107,15 @@ struct TimerView: View {
                             .foregroundColor(.white.opacity(0.6))
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)
-                        Text("Tap to stop")
-                            .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.4))
+                        Button {
+                            handleStopRunGesture(method: .pinch)
+                        } label: {
+                            Text("Tap or pinch to stop")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white.opacity(0.4))
+                        }
+                        .buttonStyle(.plain)
+                        .handGestureShortcut(.primaryAction)
                     }
                 } else {
                     VStack(spacing: 4) {
