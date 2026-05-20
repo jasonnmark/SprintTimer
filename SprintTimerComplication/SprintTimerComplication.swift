@@ -28,15 +28,16 @@ struct LauncherView: View {
     var body: some View {
         switch family {
         case .accessoryCircular:
-            // No AccessoryWidgetBackground — the logo already has its own colored background.
             Image("AppLogo")
                 .resizable()
                 .scaledToFit()
+                .widgetAccentable()
                 .clipShape(Circle())
         case .accessoryCorner:
             Image("AppLogo")
                 .resizable()
                 .scaledToFit()
+                .widgetAccentable()
                 .clipShape(Circle())
                 .widgetLabel { Text("Sprint") }
         case .accessoryRectangular:
@@ -44,6 +45,7 @@ struct LauncherView: View {
                 Image("AppLogo")
                     .resizable()
                     .scaledToFit()
+                    .widgetAccentable()
                     .frame(width: 36, height: 36)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 Text("Sprint Timer")
@@ -57,6 +59,7 @@ struct LauncherView: View {
             Image("AppLogo")
                 .resizable()
                 .scaledToFit()
+                .widgetAccentable()
         }
     }
 }
