@@ -130,7 +130,7 @@ struct TimerView: View {
                         // Double Tap hook: hands-free stop for the finish line.
                         // Screen tap continues to work on every watch — this is purely additive.
                         Button {
-                            handleStopRunGesture()
+                            handleStopRunGesture(method: .pinch)
                         } label: {
                             Text("Tap or pinch to stop")
                                 .font(.system(size: 11))
@@ -289,12 +289,12 @@ struct TimerView: View {
     }
 
     /// Shared stop-the-run flow, callable from either the screen tap gesture or
-    /// the Double Tap primary-action Button. Uses `Date()` implicitly via
-    /// `viewModel.stopRun(...)` — no offset cheating.
-    private func handleStopRunGesture() {
+    /// the Double Tap primary-action Button. The `method` argument records which
+    /// input triggered the stop so save-time can apply per-method offsets.
+    private func handleStopRunGesture(method: StopMethod = .tap) {
         guard currentMode == .running else { return }
 
-        let result = viewModel.stopRun(modelContext: modelContext)
+        let result = viewModel.stopRun(modelContext: modelContext, stopMethod: method)
         pendingStopWasOutlier = result.isOutlier
         savedElapsedTime = viewModel.elapsedTime
 

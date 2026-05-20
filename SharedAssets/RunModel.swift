@@ -1,6 +1,16 @@
 import Foundation
 import SwiftData
 
+/// How the sprint timer was stopped. Stored as a String on Run for SwiftData
+/// compatibility — use `Run.stopMethodKind` for the typed view.
+enum StopMethod: String, Codable, CaseIterable {
+    case tap        // Screen tap (DragGesture)
+    case pinch      // Apple Watch Double Tap / pinch hand-gesture shortcut
+    case button     // Explicit hardware/UI button (reserved for future)
+    case auto       // Motion-based auto-stop (reserved for future)
+    case unknown    // Legacy or unrecorded
+}
+
 @Model
 final class Run {
     var id: UUID
@@ -9,7 +19,11 @@ final class Run {
     var elapsedTime: TimeInterval
     var notes: String
     var dayNotes: String // Deprecated - use DailyNotesManager instead
-    
+
+    // How the timer stopped (e.g. "tap", "pinch"). Optional because legacy
+    // rows predate this field. See StopMethod for valid values.
+    var stopMethod: String?
+
     // GPS & Location Data
     var actualDistance: Double?
     var averageSpeed: Double?
@@ -50,7 +64,7 @@ final class Run {
     /// integer distance for display.
     var runTypeId: UUID?
 
-    init(distance: Int, elapsedTime: TimeInterval, runTypeId: UUID? = nil, notes: String = "", dayNotes: String = "") {
+    init(distance: Int, elapsedTime: TimeInterval, runTypeId: UUID? = nil, notes: String = "", dayNotes: String = "", stopMethod: StopMethod? = nil) {
         self.id = UUID()
         self.date = Date()
         self.distance = distance
@@ -60,6 +74,16 @@ final class Run {
         self.runTypeId = runTypeId
         self.notes = notes
         self.dayNotes = dayNotes
+        self.stopMethod = stopMethod?.rawValue
+    }
+
+    /// Typed accessor for the stored `stopMethod` String. Returns `.unknown`
+    /// for legacy rows or values that don't map to a known case.
+    var stopMethodKind: StopMethod {
+        guard let raw = stopMethod, let kind = StopMethod(rawValue: raw) else {
+            return .unknown
+        }
+        return kind
     }
 
     /// Falls back to current `elapsedTime` for legacy rows that predate `originalElapsedTime`.

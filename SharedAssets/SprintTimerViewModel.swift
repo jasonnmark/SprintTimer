@@ -40,6 +40,10 @@ class SprintTimerViewModel: NSObject, ObservableObject {
 
     // Current Run Data
     @Published var currentLocation: CLLocation?
+    /// How the most recent run was stopped. Set by `stopRun(stopMethod:)` and
+    /// consumed by `saveRunData` to attach to the Run and decide whether to
+    /// apply the pinch offset.
+    @Published var lastStopMethod: StopMethod = .unknown
     @Published var startHeartRate: Double?
     @Published var endHeartRate: Double?
     @Published var averageHeartRate: Double?
@@ -254,11 +258,12 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         return data
     }
 
-    func stopRun(modelContext: ModelContext) -> (isOutlier: Bool, reason: String) {
+    func stopRun(modelContext: ModelContext, stopMethod: StopMethod = .unknown) -> (isOutlier: Bool, reason: String) {
         guard elapsedTime > 0 else {
             return (false, "")
         }
 
+        lastStopMethod = stopMethod
         isRunning = false
         timer?.invalidate()
         timer = nil
@@ -475,13 +480,24 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             combinedNotes = currentRunNotes
         }
 
-        // Create new run
+        // Create new run. originalElapsedTime is auto-set by the init to the
+        // raw recorded time; for pinch-stopped runs we then nudge elapsedTime
+        // (the display time) by the user-configured offset to compensate for
+        // pinch reaction latency. originalElapsedTime stays at the raw value.
         let run = Run(
             distance: self.selectedDistance,
             elapsedTime: elapsedTime,
             runTypeId: self.selectedRunTypeId,
-            notes: combinedNotes
+            notes: combinedNotes,
+            stopMethod: lastStopMethod
         )
+
+        if lastStopMethod == .pinch {
+            let offset = DataManager.shared.pinchOffsetSeconds
+            if offset != 0 {
+                run.elapsedTime = max(0, elapsedTime + offset)
+            }
+        }
 
         // Add location data if available
         if let location = currentLocation {
@@ -572,15 +588,20 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             }
         }
 
-        // Reverse geocode location name asynchronously
+        // Reverse-geocode the location name on iOS only. The Watch frequently
+        // lacks network when the iPhone isn't nearby, so leave the name nil on
+        // watchOS — the iPhone fills it in on sync (see SyncManager.handleRunAdded)
+        // and LocationBackfillService catches any stragglers on launch.
+        #if os(iOS)
         if let location = currentLocation {
             Task {
-                let name = await reverseGeocode(location: location)
+                let name = await LocationResolver.reverseGeocode(location: location)
                 if let name, !name.isEmpty {
                     await updateRun(id: runId) { $0.locationName = name }
                 }
             }
         }
+        #endif
 
         // Stop location updates
         if dataManager.useGPS {
@@ -647,47 +668,6 @@ extension SprintTimerViewModel {
         } catch {
             logger.error("Failed to update run \(id): \(error)")
         }
-    }
-}
-
-// MARK: - Reverse Geocoding
-import MapKit
-
-extension SprintTimerViewModel {
-    private func reverseGeocode(location: CLLocation) async -> String? {
-        logger.info("Reverse geocoding for: \(location.coordinate.latitude), \(location.coordinate.longitude)")
-
-        guard let request = MKReverseGeocodingRequest(location: location) else {
-            logger.error("MKReverseGeocodingRequest init returned nil")
-            return nil
-        }
-        do {
-            let mapItems = try await request.mapItems
-            logger.info("Geocoding returned \(mapItems.count) items")
-            if let item = mapItems.first {
-                // Try the structured address first
-                if let address = item.address {
-                    let name = address.shortAddress ?? address.fullAddress
-                    logger.info("Address result: short=\(address.shortAddress ?? "nil"), full=\(address.fullAddress)")
-                    if !name.isEmpty {
-                        return name
-                    }
-                }
-                // Fall back to addressRepresentations if address is nil
-                if let reps = item.addressRepresentations {
-                    if let cityCtx = reps.cityWithContext {
-                        logger.info("AddressRepresentations fallback: \(cityCtx)")
-                        return cityCtx
-                    } else if let city = reps.cityName {
-                        return city
-                    }
-                }
-            }
-        } catch {
-            logger.error("Reverse geocoding failed: \(error)")
-        }
-        logger.error("Reverse geocoding returned no usable result")
-        return nil
     }
 }
 

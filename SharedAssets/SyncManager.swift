@@ -30,7 +30,7 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         "windSpeed", "windDirection", "visibility", "dewPoint"
     ]
     private static let optionalIntKeys = ["steps", "uvIndex", "aqi"]
-    private static let optionalStringKeys = ["locationName", "weatherCondition"]
+    private static let optionalStringKeys = ["locationName", "weatherCondition", "stopMethod"]
 
     override init() {
         super.init()
@@ -83,6 +83,7 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         if let v = run.aqi { data["aqi"] = v }
         if let v = run.locationName { data["locationName"] = v }
         if let v = run.weatherCondition { data["weatherCondition"] = v }
+        if let v = run.stopMethod { data["stopMethod"] = v }
 
         logger.info("Sync data for run \(run.id): \(data.keys.sorted().joined(separator: ", "))")
 
@@ -117,6 +118,7 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         // Strings
         if let v = runData["locationName"] as? String { run.locationName = v }
         if let v = runData["weatherCondition"] as? String { run.weatherCondition = v }
+        if let v = runData["stopMethod"] as? String { run.stopMethod = v }
     }
 
     // MARK: - Settings Dictionary Helper
@@ -131,6 +133,7 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
             "trackAltitude": dataManager.trackAltitude,
             "saveTapTime": dataManager.saveTapTime,
             "saveGPSTime": dataManager.saveGPSTime,
+            "pinchOffsetSeconds": dataManager.pinchOffsetSeconds,
             "betaMode": dataManager.debugMode
         ]
         if let customData = try? JSONEncoder().encode(dataManager.customRunTypes) {
@@ -342,6 +345,11 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
             dataManager.saveGPSTime = saveGPSTime
         }
 
+        if let pinchOffsetSeconds = settings["pinchOffsetSeconds"] as? Double,
+           dataManager.pinchOffsetSeconds != pinchOffsetSeconds {
+            dataManager.pinchOffsetSeconds = pinchOffsetSeconds
+        }
+
         if let betaMode = settings["betaMode"] as? Bool,
            dataManager.debugMode != betaMode {
             dataManager.debugMode = betaMode
@@ -488,6 +496,54 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
                                 }
                                 try? context.save()
                                 logger.info("handleRunAdded: AQI saved for \(sameLocationRuns.count) runs")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // iPhone: reverse-geocode any synced run that arrived without a
+            // locationName (typical when the Watch saved offline). Dedup by
+            // reusing the name from a same-day same-location run when available
+            // to stay well under MapKit's geocoder throttle.
+            if (runToEnrich.locationName?.isEmpty ?? true),
+               let lat = runToEnrich.latitude, let lon = runToEnrich.longitude {
+                let runDate = Calendar.current.startOfDay(for: runToEnrich.date)
+                let sameDayWithName = existingRuns.first { run in
+                    Calendar.current.startOfDay(for: run.date) == runDate &&
+                    (run.locationName?.isEmpty == false) &&
+                    run.latitude != nil &&
+                    abs(run.latitude! - lat) < 0.01 && abs(run.longitude! - lon) < 0.01
+                }
+
+                if let donor = sameDayWithName, let name = donor.locationName {
+                    logger.info("handleRunAdded: copying locationName from nearby run")
+                    runToEnrich.locationName = name
+                    try? context.save()
+                    let syncData = runToSyncData(runToEnrich)
+                    syncNewRun(syncData)
+                } else {
+                    let runId = runToEnrich.id
+                    Task {
+                        let location = CLLocation(latitude: lat, longitude: lon)
+                        guard let name = await LocationResolver.reverseGeocode(location: location),
+                              !name.isEmpty else { return }
+                        await MainActor.run {
+                            let allRuns = (try? context.fetch(FetchDescriptor<Run>())) ?? []
+                            let sameLocationRuns = allRuns.filter { run in
+                                Calendar.current.startOfDay(for: run.date) == runDate &&
+                                (run.locationName?.isEmpty ?? true) &&
+                                run.latitude != nil &&
+                                abs(run.latitude! - lat) < 0.01 && abs(run.longitude! - lon) < 0.01
+                            }
+                            for run in sameLocationRuns {
+                                run.locationName = name
+                            }
+                            try? context.save()
+                            logger.info("handleRunAdded: locationName saved for \(sameLocationRuns.count) runs")
+                            if let updated = allRuns.first(where: { $0.id == runId }) {
+                                let syncData = runToSyncData(updated)
+                                syncNewRun(syncData)
                             }
                         }
                     }

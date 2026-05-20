@@ -34,6 +34,11 @@ struct SprintTimerApp: App {
                 // Daily backup check
                 BackupManager.shared.backupIfNeeded()
 
+                // Backfill locationName for any runs that synced from the Watch
+                // without one (or whose in-flight geocode failed). Throttled to
+                // 24h internally so repeated launches are cheap.
+                Task { await LocationBackfillService.shared.runIfNeeded() }
+
                 // One-time weather API prompt for new users
                 let defaults = UserDefaults(suiteName: "group.com.JasonMark.SprintTimer")
                 if defaults?.bool(forKey: hasShownWeatherPromptKey) != true,

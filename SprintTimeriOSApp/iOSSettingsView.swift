@@ -209,7 +209,35 @@ struct iOSSettingsView: View {
                             .foregroundColor(.gray)
                     }
                 }
-                
+
+                Section(
+                    header: Text("Timing Calibration"),
+                    footer: Text("Applied to runs stopped with the Apple Watch Double Tap (pinch). The original raw time is always preserved; this offset only adjusts the displayed time. Use a negative value to subtract pinch reaction latency.")
+                ) {
+                    HStack {
+                        Text("Pinch Offset")
+                        Spacer()
+                        Text(String(format: "%+.2fs", dataManager.pinchOffsetSeconds))
+                            .fontDesign(.monospaced)
+                            .foregroundColor(.secondary)
+                    }
+                    Stepper(
+                        value: $dataManager.pinchOffsetSeconds,
+                        in: -2.0...2.0,
+                        step: 0.05
+                    ) {
+                        Text("Adjust by 0.05s")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    if dataManager.pinchOffsetSeconds != 0 {
+                        Button("Reset to 0.00s") {
+                            dataManager.pinchOffsetSeconds = 0
+                        }
+                        .foregroundColor(.blue)
+                    }
+                }
+
                 Section(header: Text("Data Collected")) {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Time & Date", systemImage: "clock")

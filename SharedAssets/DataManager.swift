@@ -110,6 +110,7 @@ class DataManager: ObservableObject {
     private let hasSeenTutorialKey = "settings.hasSeenTutorial"
     private let openWeatherAPIKeyKey = "settings.openWeatherAPIKey"
     private let debugModeKey = "settings.betaMode"
+    private let pinchOffsetSecondsKey = "settings.pinchOffsetSeconds"
 
     @Published var debugMode: Bool = false {
         didSet {
@@ -280,6 +281,21 @@ class DataManager: ObservableObject {
         }
     }
 
+    /// Seconds added to `elapsedTime` for runs stopped via the watchOS Double
+    /// Tap / pinch gesture, to compensate for the pinch's reaction-time bias.
+    /// `originalElapsedTime` keeps the raw, unmodified value. Default 0.0;
+    /// can be negative.
+    @Published var pinchOffsetSeconds: Double = 0.0 {
+        didSet {
+            defaults.set(pinchOffsetSeconds, forKey: pinchOffsetSecondsKey)
+            if !isInitializing && !SyncManager.shared.isUpdatingFromSync {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    SyncManager.shared.syncSettings()
+                }
+            }
+        }
+    }
+
     private init() {
         // Initialize UserDefaults
         guard let groupDefaults = UserDefaults(suiteName: appGroupID) else {
@@ -358,6 +374,9 @@ class DataManager: ObservableObject {
         if defaults.object(forKey: countdownTimeKey) == nil {
             defaults.set(5, forKey: countdownTimeKey)
         }
+        if defaults.object(forKey: pinchOffsetSecondsKey) == nil {
+            defaults.set(0.0, forKey: pinchOffsetSecondsKey)
+        }
     }
 
     private func loadSettings() {
@@ -369,6 +388,7 @@ class DataManager: ObservableObject {
         trackAltitude = defaults.bool(forKey: trackAltitudeKey)
         saveTapTime = defaults.bool(forKey: saveTapTimeKey)
         saveGPSTime = defaults.bool(forKey: saveGPSTimeKey)
+        pinchOffsetSeconds = defaults.double(forKey: pinchOffsetSecondsKey)
         hasSeenTutorial = defaults.bool(forKey: hasSeenTutorialKey)
         debugMode = defaults.bool(forKey: debugModeKey)
         loadCustomRunTypes()
@@ -411,7 +431,8 @@ class DataManager: ObservableObject {
         info += "Weather: \(trackWeather)\n"
         info += "Altitude: \(trackAltitude)\n"
         info += "Save Tap Time: \(saveTapTime)\n"
-        info += "Save GPS Time: \(saveGPSTime)\n\n"
+        info += "Save GPS Time: \(saveGPSTime)\n"
+        info += "Pinch Offset (s): \(pinchOffsetSeconds)\n\n"
 
         info += "--- DATA ---\n"
         let runCount = await getRunCount()

@@ -232,6 +232,12 @@ class BackupManager: ObservableObject {
         // Daily notes
         data["dailyNotes"] = DailyNotesManager.shared.dailyNotes
 
+        // Settings that should ride along on the backup so a restore on a new
+        // device recovers the user's calibration choices.
+        data["settings"] = [
+            "pinchOffsetSeconds": DataManager.shared.pinchOffsetSeconds
+        ]
+
         return data
     }
 
@@ -273,6 +279,7 @@ class BackupManager: ObservableObject {
         if let v = run.dewPoint { d["dewPoint"] = v }
         if let v = run.aqi { d["aqi"] = v }
         if let v = run.weatherCondition { d["weatherCondition"] = v }
+        if let v = run.stopMethod { d["stopMethod"] = v }
 
         return d
     }
@@ -337,6 +344,7 @@ class BackupManager: ObservableObject {
                 if let v = runDict["dewPoint"] as? Double { run.dewPoint = v }
                 if let v = runDict["aqi"] as? Int { run.aqi = v }
                 if let v = runDict["weatherCondition"] as? String { run.weatherCondition = v }
+                if let v = runDict["stopMethod"] as? String { run.stopMethod = v }
 
                 context.insert(run)
                 restored += 1
@@ -353,6 +361,15 @@ class BackupManager: ObservableObject {
             }
             DailyNotesManager.shared.objectWillChange.send()
             logger.info("Restored \(dailyNotes.count) daily notes from backup")
+        }
+
+        // Restore settings carried in the backup. Only known keys are
+        // recognized; unknown keys are ignored so future versions stay
+        // forward-compatible.
+        if let settings = data["settings"] as? [String: Any] {
+            if let v = settings["pinchOffsetSeconds"] as? Double {
+                DataManager.shared.pinchOffsetSeconds = v
+            }
         }
     }
 

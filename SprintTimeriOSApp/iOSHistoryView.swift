@@ -4,6 +4,7 @@ import SwiftData
 struct iOSHistoryView: View {
     @Query(sort: \Run.date, order: .reverse) private var allRuns: [Run]
     @StateObject private var dailyNotesManager = DailyNotesManager.shared
+    @StateObject private var dailyLocationManager = DailyLocationManager.shared
     @State private var editMode: EditMode = .inactive
     @State private var selectedRuns = Set<UUID>()
     @State private var selectedDays = Set<Date>()
@@ -55,16 +56,28 @@ struct iOSHistoryView: View {
         }
         return grouped.map { (date, runs) in
             // For runs missing a location, use the nearest known location from the same day
-            // (they were likely at the same place)
+            // (they were likely at the same place), then the day-level captured
+            // location, then a final placeholder.
             let knownLocations = runs.compactMap { $0.locationName }.filter { !$0.isEmpty }
+            let dayLocationName = dailyLocationManager.getLocation(for: date)?.name
             let locationGrouped = Dictionary(grouping: runs) { run in
-                run.locationName ?? nearestLocation(for: run, from: runs) ?? knownLocations.first ?? "Unknown Location"
+                run.locationName
+                    ?? nearestLocation(for: run, from: runs)
+                    ?? knownLocations.first
+                    ?? dayLocationName
+                    ?? "Unknown Location"
             }
             let sortedLocations = locationGrouped.map { (location: $0.key, runs: $0.value.sorted { $0.date > $1.date }) }
                 .sorted { ($0.runs.first?.date ?? .distantPast) > ($1.runs.first?.date ?? .distantPast) }
             return (date: date, locationGroups: sortedLocations)
         }
         .sorted { $0.date > $1.date }
+    }
+
+    // True when at least one filtered run was recorded today.
+    private var hasRunsToday: Bool {
+        let today = Calendar.current.startOfDay(for: Date())
+        return filteredRuns.contains { Calendar.current.startOfDay(for: $0.date) == today }
     }
 
     // Find the closest run (by time) that has a location name
@@ -224,6 +237,19 @@ struct iOSHistoryView: View {
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    // Today card — only when today has no runs yet. Lets the user
+                    // jot down notes and capture a location before the first sprint.
+                    if !hasRunsToday {
+                        Section {
+                            TodayPlaceholderCard(
+                                hasNote: dailyNotesManager.hasNote(for: Date()),
+                                notePreview: dailyNotesManager.getNote(for: Date()),
+                                dayLocationName: dailyLocationManager.getLocation(for: Date())?.name,
+                                onTap: { activeEditor = .dayNotes(Calendar.current.startOfDay(for: Date())) }
+                            )
                         }
                     }
 
@@ -423,6 +449,62 @@ struct iOSHistoryView: View {
                 DataManager.shared.deleteRun(run)
             }
         }
+    }
+}
+
+struct TodayPlaceholderCard: View {
+    let hasNote: Bool
+    let notePreview: String
+    let dayLocationName: String?
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Today")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Text(Date(), style: .date)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Image(systemName: hasNote ? "note.text" : "note.text.badge.plus")
+                        .font(.system(size: 18))
+                        .foregroundColor(hasNote ? .blue : .gray)
+                }
+
+                if hasNote, !notePreview.isEmpty {
+                    Text(notePreview)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                } else {
+                    Text("Tap to add notes for today")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                        .italic()
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "location.fill")
+                        .font(.caption)
+                        .foregroundColor(dayLocationName == nil ? .gray : .blue)
+                    if let dayLocationName, !dayLocationName.isEmpty {
+                        Text(dayLocationName)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    } else {
+                        Text("Tap to capture location")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
@@ -1089,9 +1171,16 @@ struct DayNoteEditorView: View {
     let date: Date
     @Environment(\.dismiss) private var dismiss
     @StateObject private var dailyNotesManager = DailyNotesManager.shared
+    @StateObject private var dailyLocationManager = DailyLocationManager.shared
     @State private var noteText = ""
+    @State private var dayLocation: DayLocation?
+    @State private var isCapturingLocation = false
+    @State private var locationError: String?
     @FocusState private var isTextFieldFocused: Bool
-    
+
+    // One-shot location fetcher kept alive for the lifetime of the editor.
+    @State private var locationFetcher = OneShotLocationFetcher()
+
     var body: some View {
         NavigationStack {
             Form {
@@ -1102,16 +1191,59 @@ struct DayNoteEditorView: View {
                         Text(date, style: .date)
                     }
                 }
-                
+
                 Section(header: Text("Day Notes")) {
                     TextEditor(text: $noteText)
                         .frame(minHeight: 100)
                         .focused($isTextFieldFocused)
                         .scrollContentBackground(.hidden)
                 }
-                
+
+                Section(header: Text("Day Location")) {
+                    if let captured = dayLocation {
+                        VStack(alignment: .leading, spacing: 4) {
+                            if let name = captured.name, !name.isEmpty {
+                                Text(name)
+                                    .font(.body)
+                            } else {
+                                Text(String(format: "%.4f, %.4f", captured.latitude, captured.longitude))
+                                    .font(.body)
+                                    .fontDesign(.monospaced)
+                            }
+                            Text("Captured \(captured.capturedAt, style: .time)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Button(role: .destructive) {
+                            dailyLocationManager.clearLocation(for: date)
+                            dayLocation = nil
+                        } label: {
+                            Label("Clear Location", systemImage: "trash")
+                        }
+                    } else {
+                        Button {
+                            captureLocation()
+                        } label: {
+                            HStack {
+                                if isCapturingLocation {
+                                    ProgressView().tint(.blue)
+                                } else {
+                                    Image(systemName: "location.fill")
+                                }
+                                Text(isCapturingLocation ? "Capturing…" : "Use Current Location")
+                            }
+                        }
+                        .disabled(isCapturingLocation)
+                        if let locationError {
+                            Text(locationError)
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        }
+                    }
+                }
+
                 Section {
-                    Text("Day notes are separate from individual run notes")
+                    Text("Day notes and location are separate from individual run data. The location is used as a fallback name for any runs that day that don't resolve their own.")
                         .font(.caption)
                         .foregroundColor(.gray)
                 }
@@ -1128,7 +1260,8 @@ struct DayNoteEditorView: View {
             }
             .onAppear {
                 noteText = dailyNotesManager.getNote(for: date)
-                
+                dayLocation = dailyLocationManager.getLocation(for: date)
+
                 // Focus the text field after a short delay
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     isTextFieldFocused = true
@@ -1136,7 +1269,30 @@ struct DayNoteEditorView: View {
             }
         }
     }
-    
+
+    private func captureLocation() {
+        isCapturingLocation = true
+        locationError = nil
+        Task {
+            let fix = await locationFetcher.requestLocation()
+            guard let fix else {
+                isCapturingLocation = false
+                locationError = "Couldn't get a location fix. Check Location permission in Settings or try again outdoors."
+                return
+            }
+            let name = await LocationResolver.reverseGeocode(location: fix)
+            let entry = DayLocation(
+                latitude: fix.coordinate.latitude,
+                longitude: fix.coordinate.longitude,
+                name: name,
+                capturedAt: Date()
+            )
+            dailyLocationManager.setLocation(entry, for: date)
+            dayLocation = entry
+            isCapturingLocation = false
+        }
+    }
+
     private func saveDayNotes() {
         dailyNotesManager.setNote(noteText, for: date)
         dismiss()
