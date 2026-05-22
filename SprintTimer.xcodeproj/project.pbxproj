@@ -104,7 +104,6 @@
 				"SprintTimer Watch AppUITests/SprintTimer_Watch_AppUITests.swift",
 				"SprintTimer Watch AppUITests/SprintTimer_Watch_AppUITestsLaunchTests.swift",
 				SprintTimerTests/SprintTimerTests.swift,
-				SprintTimerUITests/AppIcon.icon,
 				SprintTimerUITests/SprintTimerUITests.swift,
 				SprintTimerUITests/SprintTimerUITestsLaunchTests.swift,
 			);
@@ -114,14 +113,12 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				SprintTimerTests/SprintTimerTests.swift,
-				SprintTimerUITests/AppIcon.icon,
 			);
 			target = 96194DDE2E3546E1008DA54F /* SprintTimerTests */;
 		};
 		96A744E42E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimerUITests" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				SprintTimerUITests/AppIcon.icon,
 				SprintTimerUITests/SprintTimerUITests.swift,
 				SprintTimerUITests/SprintTimerUITestsLaunchTests.swift,
 			);
@@ -131,7 +128,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				"SprintTimer Watch AppTests/SprintTimer_Watch_AppTests.swift",
-				SprintTimerUITests/AppIcon.icon,
 			);
 			target = 96194E032E3546E2008DA54F /* SprintTimer Watch AppTests */;
 		};
@@ -140,7 +136,6 @@
 			membershipExceptions = (
 				"SprintTimer Watch AppUITests/SprintTimer_Watch_AppUITests.swift",
 				"SprintTimer Watch AppUITests/SprintTimer_Watch_AppUITestsLaunchTests.swift",
-				SprintTimerUITests/AppIcon.icon,
 			);
 			target = 96194E0D2E3546E2008DA54F /* SprintTimer Watch AppUITests */;
 		};
@@ -150,13 +145,6 @@
 				Info.plist,
 			);
 			target = 96B754332FAD0966009CD880 /* SprintTimerComplicationExtension */;
-		};
-		96CB94862E8DF4CB007EB843 /* Exceptions for "Tests" folder in "SprintTimer Watch App" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				SprintTimerUITests/AppIcon.icon,
-			);
-			target = 96194DF42E3546E1008DA54F /* SprintTimer Watch App */;
 		};
 		96EEA7902E36BDB700E56EDA /* Exceptions for "SharedAssets" folder in "SprintTimer Watch App" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -206,7 +194,6 @@
 				96A744E22E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimer" target */,
 				96A744E32E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimerTests" target */,
 				96A744E42E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimerUITests" target */,
-				96CB94862E8DF4CB007EB843 /* Exceptions for "Tests" folder in "SprintTimer Watch App" target */,
 				96A744E52E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimer Watch AppTests" target */,
 				96A744E62E38305B00A8CF4D /* Exceptions for "Tests" folder in "SprintTimer Watch AppUITests" target */,
 			);
