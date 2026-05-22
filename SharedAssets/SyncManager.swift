@@ -263,6 +263,12 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         handleReceivedMessage(userInfo)
     }
 
+    func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String : Any]) {
+        // Counterpart sends an {activatedAt: ts} keep-alive on activation to suppress the
+        // framework's "Application context data is nil" warning. No payload to process here;
+        // implementing the method silences "delegate does not implement" warnings on receive.
+    }
+
     // MARK: - Message Handling
 
     private func handleReceivedMessage(_ message: [String: Any], replyHandler: (([String: Any]) -> Void)? = nil) {

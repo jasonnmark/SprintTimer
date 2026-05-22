@@ -685,11 +685,12 @@ extension SprintTimerViewModel: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
             // CLError.locationUnknown (code 0) is the routine "no fix yet" message; CoreLocation
-            // keeps trying. Logging it at .error makes the Console look like something's broken.
+            // keeps trying internally and fires this callback on every failed retry. Logging at
+            // .info spams the Console indoors where no fix is ever obtained, so demote to .debug.
             if let clError = error as? CLError {
                 switch clError.code {
                 case .locationUnknown:
-                    logger.info("Location not yet available; CoreLocation will keep trying")
+                    logger.debug("Location not yet available; CoreLocation will keep trying")
                 case .denied:
                     logger.notice("Location services denied")
                 default:
