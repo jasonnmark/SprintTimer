@@ -25,29 +25,33 @@ struct LauncherProvider: TimelineProvider {
 struct LauncherView: View {
     @Environment(\.widgetFamily) var family
 
+    // SwiftUI on watchOS doesn't always honor template-rendering-intent from the asset
+    // catalog; .renderingMode(.template) on the SwiftUI Image makes it explicit so
+    // .widgetAccentable() can actually tint the alpha mask.
+    private var logo: Image {
+        Image("AppLogo").renderingMode(.template)
+    }
+
     var body: some View {
         switch family {
         case .accessoryCircular:
-            Image("AppLogo")
+            logo
                 .resizable()
                 .scaledToFit()
                 .widgetAccentable()
-                .clipShape(Circle())
         case .accessoryCorner:
-            Image("AppLogo")
+            logo
                 .resizable()
                 .scaledToFit()
                 .widgetAccentable()
-                .clipShape(Circle())
                 .widgetLabel { Text("Sprint") }
         case .accessoryRectangular:
             HStack(spacing: 8) {
-                Image("AppLogo")
+                logo
                     .resizable()
                     .scaledToFit()
                     .widgetAccentable()
                     .frame(width: 36, height: 36)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 Text("Sprint Timer")
                     .font(.system(size: 16, weight: .semibold))
                 Spacer(minLength: 0)
@@ -56,7 +60,7 @@ struct LauncherView: View {
             // Inline complications only support text + an SF Symbol, not bundled images.
             Label("Sprint Timer", systemImage: "stopwatch.fill")
         default:
-            Image("AppLogo")
+            logo
                 .resizable()
                 .scaledToFit()
                 .widgetAccentable()
