@@ -635,6 +635,46 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         session.activate()
     }
     #endif
+
+    // MARK: - Reset Sync State
+
+    // Cancels any queued WCSession transfers that may be addressed to a prior
+    // install of the companion app (the "I deleted the iPhone app once and now
+    // the Watch never syncs" failure mode). Then re-requests a full sync so
+    // the connection rebuilds from scratch.
+    @discardableResult
+    func resetSyncState() -> String {
+        guard let session = session else {
+            return "WCSession not available"
+        }
+
+        let userInfoCount = session.outstandingUserInfoTransfers.count
+        for transfer in session.outstandingUserInfoTransfers {
+            transfer.cancel()
+        }
+
+        let fileCount = session.outstandingFileTransfers.count
+        for transfer in session.outstandingFileTransfers {
+            transfer.cancel()
+        }
+
+        logger.info("resetSyncState: cancelled \(userInfoCount) userInfo, \(fileCount) file transfers")
+
+        if session.activationState != .activated {
+            session.activate()
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+            self?.requestFullSync()
+        }
+
+        return "Cancelled \(userInfoCount) queued message(s), \(fileCount) file transfer(s). Full sync requested."
+    }
+
+    var outstandingTransferCount: (userInfo: Int, files: Int) {
+        guard let session = session else { return (0, 0) }
+        return (session.outstandingUserInfoTransfers.count, session.outstandingFileTransfers.count)
+    }
 }
 
 // MARK: - Helper Extensions

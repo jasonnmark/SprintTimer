@@ -105,6 +105,15 @@ struct SettingsView: View {
                                 .foregroundColor(.red)
                         }
 
+                        Button("Reset Sync State") {
+                            let result = SyncManager.shared.resetSyncState()
+                            Task {
+                                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                                let info = await dataManager.getDebugInfo()
+                                debugInfo = result + "\n\n" + info
+                            }
+                        }
+
                         Button("Delete All Data", role: .destructive) {
                             showingClearAlert = true
                         }

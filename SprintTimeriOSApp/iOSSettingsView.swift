@@ -9,7 +9,8 @@ struct iOSSettingsView: View {
     @State private var selectedStartModeIndex = 0
     @State private var showingClearAlert = false
     @State private var showingRestoreSheet = false
-    @State private var availableBackups: [BackupManager.BackupInfo] = []
+    @State private var backupListResult = BackupManager.BackupListResult(backups: [], errorMessage: nil)
+    @State private var isLoadingBackupList = false
     @State private var weatherAPIKey = ""
     @State private var isHealthConnected = false
     @State private var addingRunType = false
@@ -305,8 +306,13 @@ struct iOSSettingsView: View {
 
                     Button {
                         Task {
-                            availableBackups = await backupManager.fetchBackupList()
+                            isLoadingBackupList = true
+                            // Open the sheet immediately so the user sees progress, then
+                            // populate the result once the network call returns.
+                            backupListResult = BackupManager.BackupListResult(backups: [], errorMessage: nil)
                             showingRestoreSheet = true
+                            backupListResult = await backupManager.fetchBackupList()
+                            isLoadingBackupList = false
                         }
                     } label: {
                         HStack {
@@ -328,7 +334,7 @@ struct iOSSettingsView: View {
                             .foregroundColor(.red)
                     }
 
-                    Text("Backups are stored in your iCloud account. Daily backups kept for 1 week, weekly for 3 months, monthly forever.")
+                    Text("Backups are stored in your iCloud account. Daily backups kept for a week, weekly for a month, monthly for three months. Tap any backup to merge it into your current data — runs are deduplicated by ID so nothing gets imported twice.")
                         .font(.caption)
                         .foregroundColor(.gray)
                 }
@@ -356,6 +362,21 @@ struct iOSSettingsView: View {
                             Task { await updateDebugInfo() }
                         }
                         .buttonStyle(.borderedProminent)
+
+                        Button("Reset Sync State") {
+                            let result = SyncManager.shared.resetSyncState()
+                            debugInfo = result + "\n\n" + debugInfo
+                            Task {
+                                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                                await updateDebugInfo()
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.blue)
+
+                        Text("Cancels queued sync messages and requests a fresh full sync. Use this if the watch stopped syncing after the iPhone app was reinstalled.")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
 
                         Button("Add Test Data") {
                             Task { await generateTestData() }
@@ -394,7 +415,7 @@ struct iOSSettingsView: View {
             Text("This will permanently delete all run history. This action cannot be undone.")
         }
         .sheet(isPresented: $showingRestoreSheet) {
-            RestoreBackupView(backups: availableBackups)
+            RestoreBackupView(result: backupListResult, isLoading: isLoadingBackupList)
         }
         .sheet(isPresented: $addingRunType) {
             AddRunTypeSheet { name, distance in
@@ -591,7 +612,8 @@ struct iOSSettingsView: View {
 }
 
 struct RestoreBackupView: View {
-    let backups: [BackupManager.BackupInfo]
+    let result: BackupManager.BackupListResult
+    let isLoading: Bool
     @StateObject private var backupManager = BackupManager.shared
     @Environment(\.dismiss) private var dismiss
     @State private var restoredSuccessfully = false
@@ -599,11 +621,36 @@ struct RestoreBackupView: View {
     var body: some View {
         NavigationView {
             List {
-                if backups.isEmpty {
-                    Text("No backups found in iCloud")
-                        .foregroundColor(.secondary)
+                if isLoading {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text("Checking iCloud…")
+                            .foregroundColor(.secondary)
+                    }
+                } else if let errorMessage = result.errorMessage {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Couldn't load backups", systemImage: "exclamationmark.icloud")
+                            .font(.headline)
+                            .foregroundColor(.orange)
+                        Text(errorMessage)
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 4)
+                } else if result.backups.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("No backups found in iCloud")
+                            .foregroundColor(.secondary)
+                        Text("If you expected to see backups here, make sure you're signed in to the same iCloud account you used previously, and that the app has been opened long enough on that device for an auto-backup to run.")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 4)
                 } else {
-                    ForEach(backups) { backup in
+                    ForEach(result.backups) { backup in
                         Button {
                             Task {
                                 let success = await backupManager.restoreFromBackup(id: backup.id)

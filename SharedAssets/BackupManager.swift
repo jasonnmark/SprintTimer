@@ -75,8 +75,8 @@ class BackupManager: ObservableObject {
         }
 
         // Check cloud for backups
-        let backups = await fetchBackupList()
-        if let latest = backups.first {
+        let result = await fetchBackupList()
+        if let latest = result.backups.first {
             logger.info("Found cloud backup from \(latest.date) with \(latest.runCount) runs")
             return true
         }
@@ -143,14 +143,45 @@ class BackupManager: ObservableObject {
         let runCount: Int
     }
 
-    func fetchBackupList() async -> [BackupInfo] {
+    /// Result of a backup-list fetch. `errorMessage` is nil when the call succeeded
+    /// (even if `backups` is empty — that's "no backups yet" vs. "couldn't check").
+    struct BackupListResult {
+        var backups: [BackupInfo]
+        var errorMessage: String?
+    }
+
+    func fetchBackupList() async -> BackupListResult {
+        // Account check first — most "no backups" reports trace back to the user
+        // being signed out of iCloud or the container being unavailable, and the
+        // CloudKit query error in that case isn't helpful on its own.
+        do {
+            let status = try await container.accountStatus()
+            switch status {
+            case .available:
+                break
+            case .noAccount:
+                return BackupListResult(backups: [], errorMessage: "You're not signed in to iCloud. Sign in via Settings → [your name] → iCloud, then try again.")
+            case .restricted:
+                return BackupListResult(backups: [], errorMessage: "iCloud is restricted on this device (parental controls or an MDM profile). Backups can't be read until that's lifted.")
+            case .couldNotDetermine:
+                return BackupListResult(backups: [], errorMessage: "Couldn't determine iCloud status. Check your network connection and that you're signed in to iCloud.")
+            case .temporarilyUnavailable:
+                return BackupListResult(backups: [], errorMessage: "iCloud is temporarily unavailable. Try again in a few minutes.")
+            @unknown default:
+                return BackupListResult(backups: [], errorMessage: "iCloud is not available (status: \(status.rawValue)).")
+            }
+        } catch {
+            return BackupListResult(backups: [], errorMessage: "Couldn't check iCloud status: \(error.localizedDescription)")
+        }
+
         let database = container.privateCloudDatabase
-        let query = CKQuery(recordType: recordType, predicate: NSPredicate(value: true))
+        let predicate = NSPredicate(format: "backupDate > %@", Date.distantPast as NSDate)
+        let query = CKQuery(recordType: recordType, predicate: predicate)
         query.sortDescriptors = [NSSortDescriptor(key: "backupDate", ascending: false)]
 
         do {
             let (results, _) = try await database.records(matching: query, resultsLimit: 20)
-            return results.compactMap { _, result in
+            let backups: [BackupInfo] = results.compactMap { _, result in
                 guard let record = try? result.get() else { return nil }
                 return BackupInfo(
                     id: record.recordID,
@@ -159,15 +190,21 @@ class BackupManager: ObservableObject {
                     runCount: record["runCount"] as? Int ?? 0
                 )
             }
+            return BackupListResult(backups: backups, errorMessage: nil)
         } catch let error as CKError where error.code == .invalidArguments {
             // CloudKit needs an explicit queryable index on the record type before this query
-            // can run. The fix is in CloudKit Dashboard, not in code. Logging at .notice so it
-            // doesn't appear as a red error every launch.
-            logger.notice("Backup list unavailable — CloudKit Dashboard needs the record type's recordName (or backupDate) marked Queryable: \(error.localizedDescription)")
-            return []
+            // can run. The fix is in CloudKit Dashboard, not in code.
+            logger.notice("Backup list unavailable — CloudKit returned invalidArguments. Check that backupDate is Queryable + Sortable on the Backup record type in the active environment: \(error.localizedDescription)")
+            return BackupListResult(backups: [], errorMessage: "Your backups exist in iCloud but can't be listed yet — the Backup record type's schema isn't fully deployed. This is a developer-side fix in CloudKit Dashboard.")
+        } catch let error as CKError where error.code == .networkUnavailable || error.code == .networkFailure {
+            return BackupListResult(backups: [], errorMessage: "No network connection. Connect to Wi-Fi or cellular data and try again.")
+        } catch let error as CKError where error.code == .notAuthenticated {
+            return BackupListResult(backups: [], errorMessage: "iCloud isn't authenticated. Open Settings → [your name] → iCloud and make sure you're signed in.")
+        } catch let error as CKError where error.code == .quotaExceeded {
+            return BackupListResult(backups: [], errorMessage: "Your iCloud storage is full. Free up space in Settings → [your name] → iCloud → Manage Storage.")
         } catch {
             logger.error("Failed to fetch backup list: \(error)")
-            return []
+            return BackupListResult(backups: [], errorMessage: "Couldn't read backups from iCloud: \(error.localizedDescription)")
         }
     }
 
@@ -293,7 +330,7 @@ class BackupManager: ObservableObject {
         if let runsArray = data["runs"] as? [[String: Any]] {
             let formatter = ISO8601DateFormatter()
             let existing = (try? context.fetch(FetchDescriptor<Run>())) ?? []
-            let existingDates = Set(existing.map { $0.date.timeIntervalSince1970 })
+            let existingIDs = Set(existing.map { $0.id })
 
             var restored = 0
             for runDict in runsArray {
@@ -302,13 +339,21 @@ class BackupManager: ObservableObject {
                       let dateString = runDict["date"] as? String,
                       let date = formatter.date(from: dateString) else { continue }
 
-                // Skip if run already exists (within 1 second)
-                let ts = date.timeIntervalSince1970
-                if existingDates.contains(where: { abs($0 - ts) < 1.0 }) { continue }
+                // Skip if a run with this id is already in the store. Backups
+                // round-trip the original UUID so the same run never gets
+                // inserted twice across restore + sync.
+                if let idString = runDict["id"] as? String,
+                   let id = UUID(uuidString: idString),
+                   existingIDs.contains(id) {
+                    continue
+                }
 
                 let notes = runDict["notes"] as? String ?? ""
                 let run = Run(distance: distance, elapsedTime: elapsedTime, notes: notes)
                 run.date = date
+                if let idString = runDict["id"] as? String, let id = UUID(uuidString: idString) {
+                    run.id = id
+                }
 
                 // Restore originally recorded values from the backup if present.
                 // The init already captured the passed values; override here when the
@@ -376,7 +421,7 @@ class BackupManager: ObservableObject {
     // MARK: - Retention
 
     private func pruneOldBackups() async {
-        let backups = await fetchBackupList()
+        let backups = await fetchBackupList().backups
         guard backups.count > 1 else { return }
 
         let now = Date()
@@ -386,18 +431,24 @@ class BackupManager: ObservableObject {
         // Always keep the most recent
         if let first = backups.first { toKeep.insert(first.id) }
 
-        // Daily: keep all within 7 days
+        // Daily: one per day, kept for a week
+        let oneWeekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+        var seenDays = Set<String>()
         for backup in backups {
-            if now.timeIntervalSince(backup.date) <= 7 * 86400 {
+            guard backup.date >= oneWeekAgo else { continue }
+            let components = calendar.dateComponents([.year, .month, .day], from: backup.date)
+            let dayKey = "\(components.year ?? 0)-\(components.month ?? 0)-\(components.day ?? 0)"
+            if !seenDays.contains(dayKey) {
+                seenDays.insert(dayKey)
                 toKeep.insert(backup.id)
             }
         }
 
-        // Weekly: keep newest per week within 3 months
-        let threeMonthsAgo = calendar.date(byAdding: .month, value: -3, to: now) ?? now
+        // Weekly: one per week, kept for a month
+        let oneMonthAgo = calendar.date(byAdding: .month, value: -1, to: now) ?? now
         var seenWeeks = Set<String>()
         for backup in backups {
-            guard backup.date >= threeMonthsAgo else { continue }
+            guard backup.date >= oneMonthAgo else { continue }
             let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: backup.date)
             let weekKey = "\(components.yearForWeekOfYear ?? 0)-W\(components.weekOfYear ?? 0)"
             if !seenWeeks.contains(weekKey) {
@@ -406,9 +457,11 @@ class BackupManager: ObservableObject {
             }
         }
 
-        // Monthly: keep newest per month (forever)
+        // Monthly: one per month, kept for three months
+        let threeMonthsAgo = calendar.date(byAdding: .month, value: -3, to: now) ?? now
         var seenMonths = Set<String>()
         for backup in backups {
+            guard backup.date >= threeMonthsAgo else { continue }
             let components = calendar.dateComponents([.year, .month], from: backup.date)
             let monthKey = "\(components.year ?? 0)-\(components.month ?? 0)"
             if !seenMonths.contains(monthKey) {

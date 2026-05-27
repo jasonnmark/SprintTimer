@@ -50,7 +50,7 @@ struct SprintTimerApp: App {
             .alert("Restore from Backup?", isPresented: $showRestorePrompt) {
                 Button("Restore") {
                     Task {
-                        let backups = await BackupManager.shared.fetchBackupList()
+                        let backups = await BackupManager.shared.fetchBackupList().backups
                         if let latest = backups.first {
                             _ = await BackupManager.shared.restoreFromBackup(id: latest.id)
                         }

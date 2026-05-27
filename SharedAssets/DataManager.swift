@@ -422,6 +422,9 @@ class DataManager: ObservableObject {
         #else
         info += "Platform: watchOS\n"
         #endif
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        info += "Version: \(version) (\(build))\n"
         info += "Time: \(Date().formatted())\n\n"
 
         info += "--- SETTINGS ---\n"
@@ -448,6 +451,9 @@ class DataManager: ObservableObject {
             info += "Watch Installed: \(session.isWatchAppInstalled)\n"
             #endif
             info += "Reachable: \(session.isReachable)\n"
+            let pending = SyncManager.shared.outstandingTransferCount
+            info += "Queued userInfo: \(pending.userInfo)\n"
+            info += "Queued files: \(pending.files)\n"
         } else {
             info += "WCSession: Not supported\n"
         }
