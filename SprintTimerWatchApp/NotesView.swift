@@ -78,6 +78,10 @@ struct NotesView: View {
             if let editingRun = viewModel.currentEditingRun {
                 editingRun.notes = noteText
                 try? modelContext.save()
+                // Propagate the edit to the iPhone so a subsequent full-sync
+                // doesn't overwrite the Watch's note with the iPhone's stale copy.
+                let syncData = SyncManager.shared.runToSyncData(editingRun)
+                SyncManager.shared.syncNewRun(syncData)
                 viewModel.currentEditingRun = nil
             } else {
                 viewModel.currentRunNotes = noteText

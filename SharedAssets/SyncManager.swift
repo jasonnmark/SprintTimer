@@ -379,6 +379,7 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
 
         let date = Date(timeIntervalSince1970: dateTimestamp)
         let notes = runData["notes"] as? String ?? ""
+        let incomingId = (runData["id"] as? String).flatMap(UUID.init(uuidString:))
         let syncKeys = runData.keys.sorted().joined(separator: ", ")
         logger.info("handleRunAdded: \(distance)m, keys: \(syncKeys)")
 
@@ -388,17 +389,38 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
 
         do {
             let existingRuns = try context.fetch(descriptor)
-            let existingRun = existingRuns.first { run in
-                abs(run.date.timeIntervalSince(date)) < 1.0 &&
-                run.distance == distance &&
-                abs(run.elapsedTime - elapsedTime) < 0.001
-            }
+            // UUID match is the source of truth — edits on the other device change
+            // distance/elapsedTime, and fuzzy matching on those mutable fields would
+            // miss and insert a duplicate. The fuzzy fallback only catches legacy
+            // payloads (no `id`) or runs that pre-date UUID-aware sync.
+            let existingRun: Run? = {
+                if let id = incomingId, let hit = existingRuns.first(where: { $0.id == id }) {
+                    return hit
+                }
+                return existingRuns.first { run in
+                    abs(run.date.timeIntervalSince(date)) < 1.0 &&
+                    run.distance == distance &&
+                    abs(run.elapsedTime - elapsedTime) < 0.001
+                }
+            }()
 
             let runToEnrich: Run
             if let existingRun {
                 // Update existing run with any new enriched fields (location, HR, weather).
                 // Original recorded values are immutable — never overwrite them on update.
                 logger.info("handleRunAdded: updating existing run with enriched data")
+                // Pull edited values through: when the sender edited distance/elapsedTime,
+                // the new values arrive here and must overwrite the receiver's copy.
+                // originalDistance/originalElapsedTime stay immutable.
+                if existingRun.distance != distance {
+                    existingRun.distance = distance
+                }
+                if abs(existingRun.elapsedTime - elapsedTime) > 0.0001 {
+                    existingRun.elapsedTime = elapsedTime
+                }
+                if abs(existingRun.date.timeIntervalSince(date)) > 0.0001 {
+                    existingRun.date = date
+                }
                 applyOptionalFields(from: runData, to: existingRun)
                 if !notes.isEmpty && existingRun.notes.isEmpty {
                     existingRun.notes = notes
@@ -408,6 +430,10 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
                 runToEnrich = existingRun
             } else {
                 let run = Run(distance: distance, elapsedTime: elapsedTime, notes: notes)
+                // Adopt the sender's UUID so both devices converge on a single identity.
+                // Without this, the same physical run carries two different UUIDs across
+                // devices and any subsequent edit-resync mints another duplicate.
+                if let id = incomingId { run.id = id }
                 run.date = date
                 // Honor explicit originals from the sender (preserves the true recorded values
                 // when the run has already been edited on the other device). If absent, the

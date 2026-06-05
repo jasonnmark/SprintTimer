@@ -349,6 +349,14 @@ class DataManager: ObservableObject {
 
         // Mark initialization as complete
         isInitializing = false
+
+        // One-shot cleanup of duplicates produced by the pre-fix sync receiver.
+        // iPhone-only because the Watch will converge via the deletion broadcasts.
+        #if os(iOS)
+        Task { @MainActor in
+            self.performRunDedupMigrationIfNeeded()
+        }
+        #endif
     }
 
     private func initializeDefaults() {
@@ -560,3 +568,195 @@ class DataManager: ObservableObject {
 
 // MARK: - WatchConnectivity Import
 import WatchConnectivity
+
+// MARK: - Run dedup migration (one-shot)
+//
+// Pre-fix the WatchConnectivity receiver matched incoming runs by fuzzy
+// (date±1s, distance, elapsedTime±0.001s). Editing distance or elapsedTime on
+// one device pushed the value past the 0.001s window on the other, so the
+// receiver took the INSERT branch and created a fresh row with a new UUID.
+// The orphans share the same immutable originalDistance + originalElapsedTime
+// and a date within a couple of seconds, so we cluster on those, keep the
+// oldest, merge non-nil fields, delete siblings, and broadcast the deletions.
+#if os(iOS)
+extension DataManager {
+    private static let dedupMigrationKey = "didRunDedupMigrationV1"
+
+    @MainActor
+    func performRunDedupMigrationIfNeeded() {
+        guard !defaults.bool(forKey: Self.dedupMigrationKey) else { return }
+
+        let context = modelContainer.mainContext
+        let allRuns: [Run]
+        do {
+            allRuns = try context.fetch(FetchDescriptor<Run>())
+        } catch {
+            logger.error("dedupMigrationV1: fetch failed: \(error)")
+            return
+        }
+
+        // Defensive: regenerate any zero UUIDs. Run.init always assigns a
+        // fresh UUID so this branch should never fire in practice.
+        let zeroUUID = UUID(uuid: (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0))
+        var regeneratedIds = 0
+        for run in allRuns where run.id == zeroUUID {
+            run.id = UUID()
+            regeneratedIds += 1
+        }
+
+        // Flat O(n²) cluster scan — n is small and this runs once.
+        var processed = Set<UUID>()
+        var deletedIds: [UUID] = []
+        var mergedClusters = 0
+
+        for anchor in allRuns {
+            if processed.contains(anchor.id) { continue }
+
+            let anchorOrigDistance = anchor.originalDistance ?? anchor.distance
+            let anchorOrigTime = anchor.originalElapsedTime ?? anchor.elapsedTime
+
+            let cluster = allRuns.filter { other in
+                if processed.contains(other.id) { return false }
+                let otherOrigDistance = other.originalDistance ?? other.distance
+                let otherOrigTime = other.originalElapsedTime ?? other.elapsedTime
+                return otherOrigDistance == anchorOrigDistance &&
+                    abs(otherOrigTime - anchorOrigTime) < 0.001 &&
+                    abs(other.date.timeIntervalSince(anchor.date)) < 2.0
+            }
+
+            for run in cluster { processed.insert(run.id) }
+
+            guard cluster.count > 1 else { continue }
+
+            // Canonical: oldest date wins; tiebreak by richer optional payload.
+            let canonical = cluster.min { a, b in
+                if a.date != b.date { return a.date < b.date }
+                return Self.optionalFieldRichness(a) > Self.optionalFieldRichness(b)
+            }!
+
+            let siblings = cluster.filter { $0.id != canonical.id }
+            Self.mergeSiblings(siblings, into: canonical)
+
+            for sibling in siblings {
+                deletedIds.append(sibling.id)
+                context.delete(sibling)
+            }
+            mergedClusters += 1
+        }
+
+        if !deletedIds.isEmpty || regeneratedIds > 0 {
+            do {
+                try context.save()
+                logger.info("dedupMigrationV1: \(mergedClusters) clusters merged, \(deletedIds.count) runs deleted, \(regeneratedIds) UUIDs regenerated")
+            } catch {
+                logger.error("dedupMigrationV1: save failed: \(error)")
+                return
+            }
+            for id in deletedIds {
+                SyncManager.shared.syncRunDeletion(id)
+            }
+        } else {
+            logger.info("dedupMigrationV1: no duplicates found")
+        }
+
+        defaults.set(true, forKey: Self.dedupMigrationKey)
+    }
+
+    private static func optionalFieldRichness(_ run: Run) -> Int {
+        var count = 0
+        if run.latitude != nil { count += 1 }
+        if run.longitude != nil { count += 1 }
+        if run.altitude != nil { count += 1 }
+        if run.locationName?.isEmpty == false { count += 1 }
+        if run.actualDistance != nil { count += 1 }
+        if run.averageSpeed != nil { count += 1 }
+        if run.altitudeGain != nil { count += 1 }
+        if run.startHeartRate != nil { count += 1 }
+        if run.endHeartRate != nil { count += 1 }
+        if run.averageHeartRate != nil { count += 1 }
+        if run.maxHeartRate != nil { count += 1 }
+        if run.steps != nil { count += 1 }
+        if run.strideLength != nil { count += 1 }
+        if run.temperature != nil { count += 1 }
+        if run.feelsLike != nil { count += 1 }
+        if run.humidity != nil { count += 1 }
+        if run.pressure != nil { count += 1 }
+        if run.windSpeed != nil { count += 1 }
+        if run.windDirection != nil { count += 1 }
+        if run.visibility != nil { count += 1 }
+        if run.uvIndex != nil { count += 1 }
+        if run.dewPoint != nil { count += 1 }
+        if run.aqi != nil { count += 1 }
+        if run.weatherCondition?.isEmpty == false { count += 1 }
+        if !run.notes.isEmpty { count += 1 }
+        if run.runTypeId != nil { count += 1 }
+        return count
+    }
+
+    private static func mergeSiblings(_ siblings: [Run], into canonical: Run) {
+        // Edited mutable values: if canonical still matches its original but a
+        // sibling shows an edit, adopt the sibling's edit. Otherwise canonical
+        // wins (it's the oldest record's current state).
+        let canonicalOrigTime = canonical.originalElapsedTime ?? canonical.elapsedTime
+        if abs(canonical.elapsedTime - canonicalOrigTime) <= 0.0001,
+           let editedSibling = siblings.first(where: { s in
+               let o = s.originalElapsedTime ?? s.elapsedTime
+               return abs(s.elapsedTime - o) > 0.0001
+           }) {
+            canonical.elapsedTime = editedSibling.elapsedTime
+        }
+
+        let canonicalOrigDistance = canonical.originalDistance ?? canonical.distance
+        if canonical.distance == canonicalOrigDistance,
+           let editedSibling = siblings.first(where: { s in
+               let o = s.originalDistance ?? s.distance
+               return s.distance != o
+           }) {
+            canonical.distance = editedSibling.distance
+        }
+
+        // Backfill any nil optional fields from siblings (first non-nil wins).
+        for sibling in siblings {
+            if canonical.latitude == nil { canonical.latitude = sibling.latitude }
+            if canonical.longitude == nil { canonical.longitude = sibling.longitude }
+            if canonical.altitude == nil { canonical.altitude = sibling.altitude }
+            if canonical.locationName?.isEmpty != false,
+               let v = sibling.locationName, !v.isEmpty {
+                canonical.locationName = v
+            }
+            if canonical.actualDistance == nil { canonical.actualDistance = sibling.actualDistance }
+            if canonical.averageSpeed == nil { canonical.averageSpeed = sibling.averageSpeed }
+            if canonical.altitudeGain == nil { canonical.altitudeGain = sibling.altitudeGain }
+            if canonical.startHeartRate == nil { canonical.startHeartRate = sibling.startHeartRate }
+            if canonical.endHeartRate == nil { canonical.endHeartRate = sibling.endHeartRate }
+            if canonical.averageHeartRate == nil { canonical.averageHeartRate = sibling.averageHeartRate }
+            if canonical.maxHeartRate == nil { canonical.maxHeartRate = sibling.maxHeartRate }
+            if canonical.steps == nil { canonical.steps = sibling.steps }
+            if canonical.strideLength == nil { canonical.strideLength = sibling.strideLength }
+            if canonical.temperature == nil { canonical.temperature = sibling.temperature }
+            if canonical.feelsLike == nil { canonical.feelsLike = sibling.feelsLike }
+            if canonical.humidity == nil { canonical.humidity = sibling.humidity }
+            if canonical.pressure == nil { canonical.pressure = sibling.pressure }
+            if canonical.windSpeed == nil { canonical.windSpeed = sibling.windSpeed }
+            if canonical.windDirection == nil { canonical.windDirection = sibling.windDirection }
+            if canonical.visibility == nil { canonical.visibility = sibling.visibility }
+            if canonical.uvIndex == nil { canonical.uvIndex = sibling.uvIndex }
+            if canonical.dewPoint == nil { canonical.dewPoint = sibling.dewPoint }
+            if canonical.aqi == nil { canonical.aqi = sibling.aqi }
+            if canonical.weatherCondition?.isEmpty != false,
+               let v = sibling.weatherCondition, !v.isEmpty {
+                canonical.weatherCondition = v
+            }
+            if canonical.runTypeId == nil { canonical.runTypeId = sibling.runTypeId }
+            if canonical.stopMethod == nil { canonical.stopMethod = sibling.stopMethod }
+        }
+
+        // Notes: keep the longest non-empty across canonical + siblings.
+        let allNotes = ([canonical] + siblings).map { $0.notes }.filter { !$0.isEmpty }
+        if let longest = allNotes.max(by: { $0.count < $1.count }),
+           longest.count > canonical.notes.count {
+            canonical.notes = longest
+        }
+    }
+}
+#endif
