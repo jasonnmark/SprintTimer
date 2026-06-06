@@ -3,6 +3,7 @@ import SwiftData
 import UniformTypeIdentifiers
 
 struct iOSExportView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Run.date, order: .reverse) private var runs: [Run]
     @State private var isExporting = false
     @State private var exportURL: IdentifiableURL?
@@ -12,16 +13,18 @@ struct iOSExportView: View {
     @State private var includeHealthData = true
     @State private var includeWeatherData = true
     @State private var includeLocationData = true
+    @State private var showingImporter = false
+    @State private var importResult: ImportResult?
+    @State private var importError: String?
     @StateObject private var dailyNotesManager = DailyNotesManager.shared
-    
+
     var body: some View {
         NavigationView {
             Form {
                 Section(header: Text("Export Format")) {
                     Picker("Format", selection: $selectedFormat) {
-                        Text("Excel (.xlsx)").tag(0)
-                        Text("CSV").tag(1)
-                        Text("JSON").tag(2)
+                        Text("CSV").tag(0)
+                        Text("JSON").tag(1)
                     }
                     .pickerStyle(SegmentedPickerStyle())
                 }
@@ -84,10 +87,42 @@ struct iOSExportView: View {
                         .font(.caption)
                         .foregroundColor(.gray)
                 }
+
+                Section(header: Text("Import")) {
+                    Button(action: { showingImporter = true }) {
+                        HStack {
+                            Image(systemName: "square.and.arrow.down")
+                            Text("Import from File")
+                            Spacer()
+                        }
+                    }
+                    Text("Pick a CSV or JSON file previously exported from SprintTimer. Rows with a matching UID update existing runs; rows with a blank UID create new runs. Edit in Google Sheets, then reimport.")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
             }
-            .navigationTitle("Export")
+            .navigationTitle("Import / Export")
             .sheet(item: $exportURL) { item in
                 ShareSheet(activityItems: [item.url])
+            }
+            .fileImporter(
+                isPresented: $showingImporter,
+                allowedContentTypes: [.commaSeparatedText, .json, .plainText],
+                allowsMultipleSelection: false
+            ) { result in
+                handleImport(result)
+            }
+            .alert("Import Complete", isPresented: Binding(get: { importResult != nil }, set: { if !$0 { importResult = nil } })) {
+                Button("OK", role: .cancel) { importResult = nil }
+            } message: {
+                if let r = importResult {
+                    Text("Updated \(r.updated) run\(r.updated == 1 ? "" : "s"). Created \(r.created) new run\(r.created == 1 ? "" : "s")." + (r.skipped > 0 ? " Skipped \(r.skipped) row\(r.skipped == 1 ? "" : "s")." : ""))
+                }
+            }
+            .alert("Import Failed", isPresented: Binding(get: { importError != nil }, set: { if !$0 { importError = nil } })) {
+                Button("OK", role: .cancel) { importError = nil }
+            } message: {
+                Text(importError ?? "")
             }
         }
     }
@@ -99,17 +134,10 @@ struct iOSExportView: View {
         let runsData = extractRunsData()
         
         DispatchQueue.global(qos: .userInitiated).async {
-            let fileURL: URL
-            
-            switch selectedFormat {
-            case 0:
-                fileURL = self.createExcelFile(from: runsData)
-            case 1:
-                fileURL = self.createCSVFile(from: runsData)
-            default:
-                fileURL = self.createJSONFile(from: runsData)
-            }
-            
+            let fileURL: URL = (selectedFormat == 0)
+                ? self.createCSVFile(from: runsData)
+                : self.createJSONFile(from: runsData)
+
             DispatchQueue.main.async {
                 self.isExporting = false
                 self.exportURL = IdentifiableURL(url: fileURL)
@@ -223,13 +251,10 @@ struct iOSExportView: View {
         return dirs[index % 16]
     }
 
-    private func createExcelFile(from runsData: [RunData]) -> URL {
-        // Column order:
-        // Core: Date, Time of Day, Day, Distance, Elapsed (s), Time (formatted), Avg Speed (m/s)
-        // Notes: Run Notes, Day Notes
-        // Health: Start HR, End HR, Avg HR, Max HR, Steps, Stride Length (race)
-        // GPS: Latitude, Longitude, Location, Altitude, Alt Gain, GPS Distance, GPS Avg Speed, GPS Stride Length
-        // Weather: Condition, Temp, Feels Like, Humidity, Pressure, Wind Speed, Wind Dir (°), Wind Dir, Visibility, UV, Dew Point, AQI
+    private func createCSVFile(from runsData: [RunData]) -> URL {
+        // UID is the last column so it stays out of the way while editing in
+        // Sheets. On import: UID matches an existing run -> update it; blank
+        // UID -> new run. Run type is matched on name on import.
 
         var csvString = "Date,Time of Day,Day of Week,Run Type,Distance (m),Original Recorded Distance (m),Elapsed Time (s),Original Recorded Time (s),Avg Speed (m/s)"
 
@@ -255,7 +280,7 @@ struct iOSExportView: View {
             csvString += ",Condition,Temperature (°C),Feels Like (°C),Humidity (%),Pressure (hPa),Wind Speed (m/s),Wind Direction (°),Wind Direction,Visibility (m),UV Index,Dew Point (°C),AQI"
         }
 
-        csvString += "\n"
+        csvString += ",UID\n"
 
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .short
@@ -349,7 +374,7 @@ struct iOSExportView: View {
                 csvString += ",\(run.aqi.map { "\($0)" } ?? "")"
             }
 
-            csvString += "\n"
+            csvString += ",\"\(run.id.uuidString)\"\n"
         }
 
         let fileName = "SprintTimer_Export_\(Date().timeIntervalSince1970).csv"
@@ -362,11 +387,6 @@ struct iOSExportView: View {
         }
 
         return path
-    }
-    
-    private func createCSVFile(from runsData: [RunData]) -> URL {
-        // Same as Excel for now
-        return createExcelFile(from: runsData)
     }
     
     private func createJSONFile(from runsData: [RunData]) -> URL {
@@ -393,9 +413,9 @@ struct iOSExportView: View {
                 runDict["runType"] = name
             }
 
-            if includeNotes && !run.notes.isEmpty {
-                runDict["notes"] = run.notes
-                runDict["dayNotes"] = run.dayNote
+            if includeNotes {
+                if !run.notes.isEmpty { runDict["notes"] = run.notes }
+                if !run.dayNote.isEmpty { runDict["dayNotes"] = run.dayNote }
             }
 
             if includeHealthData {
@@ -467,6 +487,366 @@ struct iOSExportView: View {
         }
 
         return path
+    }
+
+    // MARK: - Import
+
+    struct ImportResult {
+        var updated: Int = 0
+        var created: Int = 0
+        var skipped: Int = 0
+    }
+
+    private func handleImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .failure(let error):
+            importError = error.localizedDescription
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let needsScope = url.startAccessingSecurityScopedResource()
+            defer { if needsScope { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let data = try Data(contentsOf: url)
+                let ext = url.pathExtension.lowercased()
+                let rows: [ImportedRow]
+                if ext == "json" {
+                    rows = try parseJSON(data)
+                } else {
+                    guard let text = String(data: data, encoding: .utf8) else {
+                        throw NSError(domain: "Import", code: 1, userInfo: [NSLocalizedDescriptionKey: "File is not UTF-8 text."])
+                    }
+                    rows = try parseCSV(text)
+                }
+                importResult = applyImport(rows)
+            } catch {
+                importError = error.localizedDescription
+            }
+        }
+    }
+
+    // Subset of fields the importer reads. Computed/display-only columns are ignored.
+    private struct ImportedRow {
+        var id: UUID?
+        var runTypeId: UUID?
+        var runTypeName: String?
+        var date: Date?
+        var distance: Int?
+        var elapsedTime: TimeInterval?
+        var notes: String?
+        var dayNote: String?
+        var locationName: String?
+        var latitude: Double?
+        var longitude: Double?
+        var altitude: Double?
+        var altitudeGain: Double?
+        var actualDistance: Double?
+        var startHeartRate: Double?
+        var endHeartRate: Double?
+        var averageHeartRate: Double?
+        var maxHeartRate: Double?
+        var steps: Int?
+        var temperature: Double?
+        var feelsLike: Double?
+        var humidity: Double?
+        var pressure: Double?
+        var windSpeed: Double?
+        var windDirection: Double?
+        var visibility: Double?
+        var uvIndex: Int?
+        var dewPoint: Double?
+        var aqi: Int?
+        var weatherCondition: String?
+    }
+
+    @MainActor
+    private func applyImport(_ rows: [ImportedRow]) -> ImportResult {
+        var result = ImportResult()
+        let existing = (try? modelContext.fetch(FetchDescriptor<Run>())) ?? []
+        var byId: [UUID: Run] = [:]
+        for r in existing { byId[r.id] = r }
+
+        for row in rows {
+            // Need at minimum a distance and elapsedTime to identify a valid run.
+            guard let distance = row.distance, let elapsed = row.elapsedTime else {
+                result.skipped += 1
+                continue
+            }
+
+            let resolvedTypeId = resolveRunTypeId(row: row, distance: distance)
+
+            if let id = row.id, let run = byId[id] {
+                apply(row, distance: distance, elapsed: elapsed, typeId: resolvedTypeId, to: run)
+                result.updated += 1
+            } else {
+                let run = Run(distance: distance, elapsedTime: elapsed, runTypeId: resolvedTypeId, notes: row.notes ?? "")
+                if let id = row.id { run.id = id }
+                apply(row, distance: distance, elapsed: elapsed, typeId: resolvedTypeId, to: run)
+                modelContext.insert(run)
+                result.created += 1
+            }
+        }
+
+        try? modelContext.save()
+        return result
+    }
+
+    /// Resolves a non-nil `runTypeId` for an imported row. Match priority:
+    /// 1. Exact (case-insensitive) name match against existing types.
+    /// 2. If the row has a name but no match, create a new custom type with
+    ///    that name + the row's distance.
+    /// 3. If the row has no name, match an existing type by distance.
+    /// 4. If still nothing, create a custom "<distance>m" type.
+    /// Result: every imported run has its `runTypeId` set.
+    @MainActor
+    private func resolveRunTypeId(row: ImportedRow, distance: Int) -> UUID {
+        let dm = DataManager.shared
+        let all = dm.allRunTypesIncludingArchived
+
+        // JSON round-trip: trust an existing runTypeId only if it matches a
+        // known type. CSV doesn't carry runTypeId, so this path is JSON-only.
+        if let id = row.runTypeId, all.contains(where: { $0.id == id }) {
+            return id
+        }
+
+        let trimmedName = row.runTypeName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if !trimmedName.isEmpty {
+            if let match = all.first(where: { $0.name.caseInsensitiveCompare(trimmedName) == .orderedSame }) {
+                return match.id
+            }
+            return dm.addCustomType(name: trimmedName, distance: distance).id
+        }
+
+        if let match = all.first(where: { $0.distance == distance }) {
+            return match.id
+        }
+        return dm.addCustomType(name: "\(distance)m", distance: distance).id
+    }
+
+    @MainActor
+    private func apply(_ row: ImportedRow, distance: Int, elapsed: TimeInterval, typeId: UUID, to run: Run) {
+        run.distance = distance
+        run.elapsedTime = elapsed
+        if let date = row.date { run.date = date }
+        run.runTypeId = typeId
+        if let notes = row.notes { run.notes = notes }
+        if let dayNote = row.dayNote { dailyNotesManager.setNote(dayNote, for: run.date) }
+        if let v = row.locationName { run.locationName = v.isEmpty ? nil : v }
+        if let v = row.latitude { run.latitude = v }
+        if let v = row.longitude { run.longitude = v }
+        if let v = row.altitude { run.altitude = v }
+        if let v = row.altitudeGain { run.altitudeGain = v }
+        if let v = row.actualDistance { run.actualDistance = v }
+        if let v = row.startHeartRate { run.startHeartRate = v }
+        if let v = row.endHeartRate { run.endHeartRate = v }
+        if let v = row.averageHeartRate { run.averageHeartRate = v }
+        if let v = row.maxHeartRate { run.maxHeartRate = v }
+        if let v = row.steps { run.steps = v }
+        if let v = row.temperature { run.temperature = v }
+        if let v = row.feelsLike { run.feelsLike = v }
+        if let v = row.humidity { run.humidity = v }
+        if let v = row.pressure { run.pressure = v }
+        if let v = row.windSpeed { run.windSpeed = v }
+        if let v = row.windDirection { run.windDirection = v }
+        if let v = row.visibility { run.visibility = v }
+        if let v = row.uvIndex { run.uvIndex = v }
+        if let v = row.dewPoint { run.dewPoint = v }
+        if let v = row.aqi { run.aqi = v }
+        if let v = row.weatherCondition { run.weatherCondition = v.isEmpty ? nil : v }
+    }
+
+    // MARK: - JSON parsing
+
+    private func parseJSON(_ data: Data) throws -> [ImportedRow] {
+        guard let array = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw NSError(domain: "Import", code: 2, userInfo: [NSLocalizedDescriptionKey: "JSON root must be an array of run objects."])
+        }
+        let iso = ISO8601DateFormatter()
+        return array.map { dict in
+            var row = ImportedRow()
+            if let s = dict["id"] as? String { row.id = UUID(uuidString: s) }
+            if let s = dict["runTypeId"] as? String { row.runTypeId = UUID(uuidString: s) }
+            if let s = dict["runType"] as? String { row.runTypeName = s }
+            if let s = dict["date"] as? String { row.date = iso.date(from: s) }
+            if let v = dict["distance"] as? Int { row.distance = v }
+            else if let v = dict["distance"] as? Double { row.distance = Int(v) }
+            if let v = dict["elapsedTime"] as? Double { row.elapsedTime = v }
+            else if let v = dict["elapsedTime"] as? Int { row.elapsedTime = TimeInterval(v) }
+            if let v = dict["notes"] as? String { row.notes = v }
+            if let v = dict["dayNotes"] as? String { row.dayNote = v }
+            if let loc = dict["locationName"] as? String { row.locationName = loc }
+            if let health = dict["healthData"] as? [String: Any] {
+                row.startHeartRate = health["startHeartRate"] as? Double
+                row.endHeartRate = health["endHeartRate"] as? Double
+                row.averageHeartRate = health["averageHeartRate"] as? Double
+                row.maxHeartRate = health["maxHeartRate"] as? Double
+                row.steps = health["steps"] as? Int
+            }
+            if let gps = dict["gpsData"] as? [String: Any] {
+                row.latitude = gps["latitude"] as? Double
+                row.longitude = gps["longitude"] as? Double
+                row.altitude = gps["altitude"] as? Double
+                row.altitudeGain = gps["altitudeGain"] as? Double
+                row.actualDistance = gps["gpsDistance"] as? Double
+                if let loc = gps["locationName"] as? String { row.locationName = loc }
+            }
+            if let w = dict["weatherData"] as? [String: Any] {
+                row.weatherCondition = w["condition"] as? String
+                row.temperature = w["temperature"] as? Double
+                row.feelsLike = w["feelsLike"] as? Double
+                row.humidity = w["humidity"] as? Double
+                row.pressure = w["pressure"] as? Double
+                row.windSpeed = w["windSpeed"] as? Double
+                row.windDirection = w["windDirectionDegrees"] as? Double
+                row.visibility = w["visibility"] as? Double
+                row.uvIndex = w["uvIndex"] as? Int
+                row.dewPoint = w["dewPoint"] as? Double
+                row.aqi = w["aqi"] as? Int
+            }
+            return row
+        }
+    }
+
+    // MARK: - CSV parsing
+
+    private func parseCSV(_ text: String) throws -> [ImportedRow] {
+        // Strip a leading UTF-8 BOM (Sheets/Excel often prepend "\u{FEFF}" when
+        // re-exporting). Without this, the first header cell becomes
+        // "\u{FEFF}date" and every column-name lookup misses.
+        var cleaned = text
+        if cleaned.hasPrefix("\u{FEFF}") { cleaned.removeFirst() }
+        // Normalize line endings. Swift iterates "\r\n" as a single Character
+        // (extended grapheme cluster), so the parser's switch matches neither
+        // "\r" nor "\n" — every CRLF row would be folded into one giant line.
+        // Collapse CRLF and lone CR down to LF before parsing.
+        cleaned = cleaned.replacingOccurrences(of: "\r\n", with: "\n")
+        cleaned = cleaned.replacingOccurrences(of: "\r", with: "\n")
+
+        let records = splitCSV(cleaned)
+        guard let header = records.first, records.count > 1 else { return [] }
+
+        // Normalize header cells: strip BOM, trim whitespace, lowercase.
+        func normalize(_ s: String) -> String {
+            s.replacingOccurrences(of: "\u{FEFF}", with: "")
+                .trimmingCharacters(in: .whitespaces)
+                .lowercased()
+        }
+        let columns: [String: Int] = Dictionary(
+            header.enumerated().map { (normalize($1), $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        func col(_ row: [String], _ key: String) -> String? {
+            guard let i = columns[normalize(key)], i < row.count else { return nil }
+            let v = row[i].trimmingCharacters(in: .whitespaces)
+            return v.isEmpty ? nil : v
+        }
+
+        let shortDate = DateFormatter(); shortDate.dateStyle = .short
+        let shortTime = DateFormatter(); shortTime.timeStyle = .short
+        let iso = ISO8601DateFormatter()
+
+        var rows: [ImportedRow] = []
+        for record in records.dropFirst() {
+            if record.allSatisfy({ $0.trimmingCharacters(in: .whitespaces).isEmpty }) { continue }
+            var row = ImportedRow()
+            if let s = col(record, "UID") { row.id = UUID(uuidString: s) }
+            row.runTypeName = col(record, "Run Type")
+
+            // Date may be ISO8601 or shortDate; combine with "Time of Day" if present.
+            if let d = col(record, "Date") {
+                if let parsed = iso.date(from: d) {
+                    row.date = parsed
+                } else if let day = shortDate.date(from: d) {
+                    if let t = col(record, "Time of Day"), let time = shortTime.date(from: t) {
+                        let cal = Calendar.current
+                        let dayComp = cal.dateComponents([.year, .month, .day], from: day)
+                        let timeComp = cal.dateComponents([.hour, .minute, .second], from: time)
+                        var merged = DateComponents()
+                        merged.year = dayComp.year; merged.month = dayComp.month; merged.day = dayComp.day
+                        merged.hour = timeComp.hour; merged.minute = timeComp.minute; merged.second = timeComp.second
+                        row.date = cal.date(from: merged)
+                    } else {
+                        row.date = day
+                    }
+                }
+            }
+
+            row.distance = col(record, "Distance (m)").flatMap { Int($0) }
+            row.elapsedTime = col(record, "Elapsed Time (s)").flatMap { Double($0) }
+            row.notes = col(record, "Run Notes")
+            row.dayNote = col(record, "Day Notes")
+            row.locationName = col(record, "Location")
+            row.latitude = col(record, "Latitude").flatMap { Double($0) }
+            row.longitude = col(record, "Longitude").flatMap { Double($0) }
+            row.altitude = col(record, "Altitude (m)").flatMap { Double($0) }
+            row.altitudeGain = col(record, "Altitude Gain (m)").flatMap { Double($0) }
+            row.actualDistance = col(record, "GPS Distance (m)").flatMap { Double($0) }
+            row.startHeartRate = col(record, "Start HR").flatMap { Double($0) }
+            row.endHeartRate = col(record, "End HR").flatMap { Double($0) }
+            row.averageHeartRate = col(record, "Avg HR").flatMap { Double($0) }
+            row.maxHeartRate = col(record, "Max HR").flatMap { Double($0) }
+            row.steps = col(record, "Steps").flatMap { Int($0) }
+            row.weatherCondition = col(record, "Condition")
+            row.temperature = col(record, "Temperature (°C)").flatMap { Double($0) }
+            row.feelsLike = col(record, "Feels Like (°C)").flatMap { Double($0) }
+            row.humidity = col(record, "Humidity (%)").flatMap { Double($0) }
+            row.pressure = col(record, "Pressure (hPa)").flatMap { Double($0) }
+            row.windSpeed = col(record, "Wind Speed (m/s)").flatMap { Double($0) }
+            row.windDirection = col(record, "Wind Direction (°)").flatMap { Double($0) }
+            row.visibility = col(record, "Visibility (m)").flatMap { Double($0) }
+            row.uvIndex = col(record, "UV Index").flatMap { Int($0) }
+            row.dewPoint = col(record, "Dew Point (°C)").flatMap { Double($0) }
+            row.aqi = col(record, "AQI").flatMap { Int($0) }
+            rows.append(row)
+        }
+        return rows
+    }
+
+    // RFC-4180-ish CSV record splitter: handles quoted fields, embedded commas, "" escape, embedded newlines.
+    private func splitCSV(_ text: String) -> [[String]] {
+        var records: [[String]] = []
+        var field = ""
+        var record: [String] = []
+        var inQuotes = false
+        var i = text.startIndex
+        while i < text.endIndex {
+            let c = text[i]
+            if inQuotes {
+                if c == "\"" {
+                    let next = text.index(after: i)
+                    if next < text.endIndex, text[next] == "\"" {
+                        field.append("\"")
+                        i = text.index(after: next)
+                        continue
+                    } else {
+                        inQuotes = false
+                    }
+                } else {
+                    field.append(c)
+                }
+            } else {
+                switch c {
+                case "\"":
+                    inQuotes = true
+                case ",":
+                    record.append(field); field = ""
+                case "\r":
+                    break
+                case "\n":
+                    record.append(field); field = ""
+                    records.append(record); record = []
+                default:
+                    field.append(c)
+                }
+            }
+            i = text.index(after: i)
+        }
+        if !field.isEmpty || !record.isEmpty {
+            record.append(field)
+            records.append(record)
+        }
+        return records
     }
 }
 
