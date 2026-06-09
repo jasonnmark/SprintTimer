@@ -187,55 +187,54 @@ struct CustomRunTypeTests {
         #expect(decoded[0].name == "400m Hurdles")
         #expect(decoded[1].distance == 100)
     }
-}
 
-// MARK: - Outlier Detection Logic Tests
+    // MARK: - Merge (cross-device sync)
 
-struct OutlierDetectionTests {
-    // These test the mathematical logic without needing SwiftData context
-
-    @Test func medianCalculation() {
-        let times = [12.0, 11.5, 13.0, 12.5, 11.0]
-        let sorted = times.sorted()
-        let median = sorted[sorted.count / 2]
-        #expect(median == 12.0)
+    // Regression: a peer whose snapshot didn't yet include a freshly-added local
+    // type must not wipe it out. The user lost a "5m" type this way before.
+    @Test func mergeKeepsLocalOnlyType() {
+        let localOnly = RunType(name: "5m", distance: 5)
+        let shared = RunType(name: "1k", distance: 1000)
+        let merged = RunType.merge(local: [localOnly, shared], incoming: [shared])
+        #expect(merged.contains { $0.id == localOnly.id })
+        #expect(merged.contains { $0.id == shared.id })
     }
 
-    @Test func outlierTooSlow() {
-        let medianTime = 12.0
-        let runTime = 20.0 // > 12.0 * 1.5 = 18.0
-        let isOutlier = runTime > medianTime * 1.5
-        #expect(isOutlier == true)
+    @Test func mergeAddsIncomingOnlyType() {
+        let local = RunType(name: "5m", distance: 5)
+        let incomingOnly = RunType(name: "800m", distance: 800)
+        let merged = RunType.merge(local: [local], incoming: [incomingOnly])
+        #expect(merged.count == 2)
+        #expect(merged.contains { $0.id == incomingOnly.id })
     }
 
-    @Test func outlierTooFast() {
-        let medianTime = 12.0
-        let runTime = 6.0 // < 12.0 * 0.6 = 7.2
-        let isOutlier = runTime < medianTime * 0.6
-        #expect(isOutlier == true)
+    @Test func mergeIncomingWinsOnRename() {
+        var t = RunType(name: "Original", distance: 50)
+        let renamed = RunType(id: t.id, name: "Renamed", distance: 50)
+        let merged = RunType.merge(local: [t], incoming: [renamed])
+        #expect(merged.first { $0.id == t.id }?.name == "Renamed")
     }
 
-    @Test func normalRunNotOutlier() {
-        let medianTime = 12.0
-        let runTime = 13.0
-        let tooSlow = runTime > medianTime * 1.5
-        let tooFast = runTime < medianTime * 0.6
-        #expect(tooSlow == false)
-        #expect(tooFast == false)
+    @Test func mergeIncomingWinsOnArchive() {
+        let unarchived = RunType(name: "50m", distance: 50, isArchived: false)
+        let archived = RunType(id: unarchived.id, name: "50m", distance: 50, isArchived: true)
+        let merged = RunType.merge(local: [unarchived], incoming: [archived])
+        #expect(merged.first { $0.id == unarchived.id }?.isArchived == true)
     }
 
-    @Test func borderlineSlow() {
-        let medianTime = 12.0
-        let runTime = 18.0 // exactly 1.5x
-        let isOutlier = runTime > medianTime * 1.5
-        #expect(isOutlier == false) // > not >=
+    @Test func mergeFiltersOutBuiltInIds() {
+        let bogus = RunType(id: RunType.oneHundred.id, name: "Hijack", distance: 999)
+        let local = RunType(name: "5m", distance: 5)
+        let merged = RunType.merge(local: [local], incoming: [bogus])
+        #expect(merged.contains { $0.id == local.id })
+        #expect(!merged.contains { $0.id == RunType.oneHundred.id })
     }
 
-    @Test func borderlineFast() {
-        let medianTime = 12.0
-        let runTime = 7.2 // exactly 0.6x
-        let isOutlier = runTime < medianTime * 0.6
-        #expect(isOutlier == false) // < not <=
+    @Test func mergeEmptyIncomingPreservesEverything() {
+        let a = RunType(name: "5m", distance: 5)
+        let b = RunType(name: "10m", distance: 10)
+        let merged = RunType.merge(local: [a, b], incoming: [])
+        #expect(merged.count == 2)
     }
 }
 

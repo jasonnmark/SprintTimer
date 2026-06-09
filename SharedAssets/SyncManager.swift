@@ -70,6 +70,7 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         if let v = run.actualDistance { data["actualDistance"] = v }
         if let v = run.averageSpeed { data["averageSpeed"] = v }
         if let v = run.altitudeGain { data["altitudeGain"] = v }
+        if let v = run.gpsTimeToTarget { data["gpsTimeToTarget"] = v }
         if let v = run.temperature { data["temperature"] = v }
         if let v = run.feelsLike { data["feelsLike"] = v }
         if let v = run.humidity { data["humidity"] = v }
@@ -103,6 +104,7 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         if let v = runData["actualDistance"] as? Double { run.actualDistance = v }
         if let v = runData["averageSpeed"] as? Double { run.averageSpeed = v }
         if let v = runData["altitudeGain"] as? Double { run.altitudeGain = v }
+        if let v = runData["gpsTimeToTarget"] as? Double { run.gpsTimeToTarget = v }
         if let v = runData["temperature"] as? Double { run.temperature = v }
         if let v = runData["feelsLike"] as? Double { run.feelsLike = v }
         if let v = runData["humidity"] as? Double { run.humidity = v }
@@ -362,9 +364,14 @@ class SyncManager: NSObject, ObservableObject, WCSessionDelegate {
         }
 
         if let customData = settings["customRunTypes"] as? Data,
-           let customTypes = try? JSONDecoder().decode([CustomRunType].self, from: customData),
-           dataManager.customRunTypes != customTypes {
-            dataManager.customRunTypes = customTypes
+           let incomingTypes = try? JSONDecoder().decode([CustomRunType].self, from: customData) {
+            // Merge by UUID rather than replace. The previous wholesale-assign
+            // could silently wipe a type the user had just added on this device
+            // if the peer's snapshot arrived before our outbound transfer drained.
+            let merged = RunType.merge(local: dataManager.customRunTypes, incoming: incomingTypes)
+            if dataManager.customRunTypes != merged {
+                dataManager.customRunTypes = merged
+            }
         }
     }
 

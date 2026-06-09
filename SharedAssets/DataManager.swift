@@ -54,6 +54,29 @@ extension RunType {
     )
     static let builtIns: [RunType] = [.oneHundred, .twoHundred, .fourHundred]
     var isBuiltIn: Bool { Self.builtIns.contains { $0.id == id } }
+
+    /// Union-merge two custom-type lists by UUID. Incoming wins on shared IDs
+    /// (so renames/archives still propagate across devices), but local-only
+    /// entries are KEPT — never silently deleted by a peer whose snapshot is
+    /// merely stale. Built-in IDs are filtered out defensively; they belong to
+    /// `RunType.builtIns`, not the custom store.
+    static func merge(local: [RunType], incoming: [RunType]) -> [RunType] {
+        let builtInIds = Set(builtIns.map(\.id))
+        let incomingById = Dictionary(
+            uniqueKeysWithValues: incoming
+                .filter { !builtInIds.contains($0.id) }
+                .map { ($0.id, $0) }
+        )
+        let localIds = Set(local.map(\.id))
+
+        var merged: [RunType] = local.map { localType in
+            incomingById[localType.id] ?? localType
+        }
+        for incomingType in incoming where !localIds.contains(incomingType.id) && !builtInIds.contains(incomingType.id) {
+            merged.append(incomingType)
+        }
+        return merged
+    }
 }
 
 // Back-compat alias so any external references compile while we transition.
