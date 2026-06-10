@@ -53,6 +53,8 @@ class SprintTimerViewModel: NSObject, ObservableObject {
 
     // GPS route tracking for distance/speed/altitude gain
     private var routeLocations: [CLLocation] = []
+    /// Captured at stopRun() time. Persisted on the Run in saveRunData(). Reset by resetTimer().
+    private var pendingGpsTimeToTarget: TimeInterval?
 
     private var timer: Timer?
     private var startTime: Date?
@@ -258,9 +260,9 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         return data
     }
 
-    func stopRun(modelContext: ModelContext, stopMethod: StopMethod = .unknown) -> (isOutlier: Bool, reason: String) {
+    func stopRun(modelContext: ModelContext, stopMethod: StopMethod = .unknown) {
         guard elapsedTime > 0 else {
-            return (false, "")
+            return
         }
 
         lastStopMethod = stopMethod
@@ -276,10 +278,47 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         workoutSession?.pause()
         #endif
 
-        // Check if it's an outlier before saving
-        let outlierCheck = isRunOutlier(modelContext: modelContext)
+        // When GPS is on and we captured enough route to cover the target distance,
+        // compute the GPS-derived time. Most useful when a failed stop inflates
+        // elapsedTime — the GPS reading is the unbiased record. Stashed here so
+        // saveRunData() can persist it on the Run and the note prefill below can
+        // share the same value.
+        if dataManager.useGPS, let gpsTime = gpsTimeForTargetDistance() {
+            pendingGpsTimeToTarget = gpsTime
+            let typeName: String
+            if let id = selectedRunTypeId, let type = dataManager.runType(for: id) {
+                typeName = type.name
+            } else {
+                typeName = "\(selectedDistance)m"
+            }
+            let line = "GPS time: \(typeName) \(Run.formatTime(gpsTime))"
+            if currentRunNotes.isEmpty {
+                currentRunNotes = line
+            } else {
+                currentRunNotes = "\(line) | \(currentRunNotes)"
+            }
+        }
+    }
 
-        return outlierCheck
+    /// Returns the time it took, per GPS, to cover `selectedDistance` meters — i.e. the
+    /// timestamp delta between the first route fix and the first fix where cumulative
+    /// distance crossed the target. Nil if the route never reached the target (e.g.
+    /// indoors, GPS off, or sprint shorter than the GPS distance filter).
+    private func gpsTimeForTargetDistance() -> TimeInterval? {
+        guard routeLocations.count >= 2 else { return nil }
+        let target = Double(selectedDistance)
+        guard target > 0 else { return nil }
+
+        var cumulative: CLLocationDistance = 0
+        let start = routeLocations[0].timestamp
+        for i in 1..<routeLocations.count {
+            cumulative += routeLocations[i].distance(from: routeLocations[i - 1])
+            if cumulative >= target {
+                let dt = routeLocations[i].timestamp.timeIntervalSince(start)
+                return dt > 0 ? dt : nil
+            }
+        }
+        return nil
     }
 
     func saveCurrentRun(modelContext: ModelContext) {
@@ -287,7 +326,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
     }
 
     func endRun(modelContext: ModelContext) {
-        _ = stopRun(modelContext: modelContext)
+        stopRun(modelContext: modelContext)
         resetTimer()
     }
 
@@ -328,6 +367,7 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         steps = nil
         strideLength = nil
         routeLocations = []
+        pendingGpsTimeToTarget = nil
         motionManager.stopAccelerometerUpdates()
         if dataManager.useGPS {
             locationManager.stopUpdatingLocation()
@@ -524,6 +564,8 @@ class SprintTimerViewModel: NSObject, ObservableObject {
             run.altitudeGain = altitudeGain
         }
 
+        run.gpsTimeToTarget = pendingGpsTimeToTarget
+
         // startHeartRate is fetched early in beginTiming(), so it's usually ready
         run.startHeartRate = startHeartRate
 
@@ -609,39 +651,6 @@ class SprintTimerViewModel: NSObject, ObservableObject {
         }
     }
 
-    // Outlier detection
-    func isRunOutlier(modelContext: ModelContext) -> (isOutlier: Bool, reason: String) {
-        let oneMonthAgo = Calendar.current.date(byAdding: .month, value: -1, to: Date())!
-
-        do {
-            let descriptor = FetchDescriptor<Run>(sortBy: [SortDescriptor(\.date, order: .reverse)])
-            let allRuns = try modelContext.fetch(descriptor)
-
-            let recentRuns = allRuns.filter { run in
-                run.distance == self.selectedDistance && run.date > oneMonthAgo
-            }
-
-            // Need at least 3 previous runs to compare
-            guard recentRuns.count >= 3 else {
-                return (false, "")
-            }
-
-            let sortedTimes = recentRuns.map { $0.elapsedTime }.sorted()
-            let medianTime = sortedTimes[sortedTimes.count / 2]
-
-            if elapsedTime > medianTime * 1.5 {
-                return (true, "Over 50% slower than recent typical time")
-            } else if elapsedTime < medianTime * 0.6 {
-                return (true, "Under 60% of recent typical time")
-            }
-
-            return (false, "")
-
-        } catch {
-            logger.error("Error checking for outlier: \(error)")
-            return (false, "")
-        }
-    }
 }
 
 // MARK: - Async Run Updates

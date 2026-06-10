@@ -167,6 +167,7 @@ struct iOSExportView: View {
         let longitude: Double?
         let altitude: Double?
         let altitudeGain: Double?
+        let gpsTimeToTarget: TimeInterval?
         let locationName: String?
 
         // Optional health data
@@ -213,6 +214,7 @@ struct iOSExportView: View {
                 longitude: run.longitude,
                 altitude: run.altitude,
                 altitudeGain: run.altitudeGain,
+                gpsTimeToTarget: run.gpsTimeToTarget,
                 locationName: run.locationName,
                 startHeartRate: run.startHeartRate,
                 endHeartRate: run.endHeartRate,
@@ -271,7 +273,7 @@ struct iOSExportView: View {
             if includeLocationData {
                 csvString += ",Location"
             }
-            csvString += ",Altitude (m),Altitude Gain (m),GPS Distance (m),GPS Avg Speed (m/s),GPS Stride Length (m)"
+            csvString += ",Altitude (m),Altitude Gain (m),GPS Distance (m),GPS Avg Speed (m/s),GPS Stride Length (m),GPS Time To Target (s)"
         } else if includeLocationData {
             csvString += ",Location"
         }
@@ -355,6 +357,7 @@ struct iOSExportView: View {
                     gpsStride = ""
                 }
                 csvString += ",\(gpsStride)"
+                csvString += ",\(run.gpsTimeToTarget.map { String(format: "%.3f", $0) } ?? "")"
             } else if includeLocationData {
                 csvString += ",\"\(run.locationName ?? "")\""
             }
@@ -449,6 +452,7 @@ struct iOSExportView: View {
                         gpsData["gpsStrideLength"] = actualDistance / Double(steps)
                     }
                 }
+                if let gpsTimeToTarget = run.gpsTimeToTarget { gpsData["gpsTimeToTarget"] = gpsTimeToTarget }
                 if !gpsData.isEmpty { runDict["gpsData"] = gpsData }
             } else if includeLocationData, let loc = run.locationName, !loc.isEmpty {
                 runDict["locationName"] = loc
@@ -540,6 +544,7 @@ struct iOSExportView: View {
         var altitude: Double?
         var altitudeGain: Double?
         var actualDistance: Double?
+        var gpsTimeToTarget: TimeInterval?
         var startHeartRate: Double?
         var endHeartRate: Double?
         var averageHeartRate: Double?
@@ -637,6 +642,7 @@ struct iOSExportView: View {
         if let v = row.altitude { run.altitude = v }
         if let v = row.altitudeGain { run.altitudeGain = v }
         if let v = row.actualDistance { run.actualDistance = v }
+        if let v = row.gpsTimeToTarget { run.gpsTimeToTarget = v }
         if let v = row.startHeartRate { run.startHeartRate = v }
         if let v = row.endHeartRate { run.endHeartRate = v }
         if let v = row.averageHeartRate { run.averageHeartRate = v }
@@ -688,6 +694,7 @@ struct iOSExportView: View {
                 row.altitude = gps["altitude"] as? Double
                 row.altitudeGain = gps["altitudeGain"] as? Double
                 row.actualDistance = gps["gpsDistance"] as? Double
+                row.gpsTimeToTarget = gps["gpsTimeToTarget"] as? Double
                 if let loc = gps["locationName"] as? String { row.locationName = loc }
             }
             if let w = dict["weatherData"] as? [String: Any] {
@@ -782,6 +789,7 @@ struct iOSExportView: View {
             row.altitude = col(record, "Altitude (m)").flatMap { Double($0) }
             row.altitudeGain = col(record, "Altitude Gain (m)").flatMap { Double($0) }
             row.actualDistance = col(record, "GPS Distance (m)").flatMap { Double($0) }
+            row.gpsTimeToTarget = col(record, "GPS Time To Target (s)").flatMap { Double($0) }
             row.startHeartRate = col(record, "Start HR").flatMap { Double($0) }
             row.endHeartRate = col(record, "End HR").flatMap { Double($0) }
             row.averageHeartRate = col(record, "Avg HR").flatMap { Double($0) }

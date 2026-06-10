@@ -32,6 +32,10 @@ final class Run {
     var altitude: Double?
     var altitudeGain: Double?
     var locationName: String?
+    /// Seconds elapsed (per GPS route) when cumulative distance first crossed the
+    /// selected `distance`. Nil for legacy rows, indoor runs, or when GPS is off.
+    /// Useful when a failed stop inflates `elapsedTime` — this is the unbiased read.
+    var gpsTimeToTarget: TimeInterval?
     
     // Health Data
     var startHeartRate: Double?
@@ -97,9 +101,14 @@ final class Run {
     var formattedOriginalRecordedTime: String { Run.formatTime(originalRecordedTime) }
 
     static func formatTime(_ interval: TimeInterval) -> String {
-        let minutes = Int(interval) / 60
-        let seconds = Int(interval) % 60
-        let milliseconds = Int((interval.truncatingRemainder(dividingBy: 1)) * 1000)
+        // Round to the nearest millisecond (matches CSV export's %.3f formatting,
+        // so the displayed time and the exported time always agree on the last
+        // digit). Splitting off minutes/seconds from the rounded total handles
+        // the .9995s → 1.000s carry correctly.
+        let totalMs = Int((interval * 1000).rounded())
+        let minutes = totalMs / 60_000
+        let seconds = (totalMs / 1000) % 60
+        let milliseconds = totalMs % 1000
 
         if minutes > 0 {
             return String(format: "%d:%02d.%03d", minutes, seconds, milliseconds)

@@ -47,18 +47,31 @@ struct PostRunNotesView: View {
                         .disabled(noteText.isEmpty)
                     }
 
+                    // Show the current note (incl. GPS-time prefill) above the Dictate
+                    // button. Dictation appends rather than replaces, so the prefill
+                    // survives unless the user explicitly clears it.
+                    if !noteText.isEmpty {
+                        Text(noteText)
+                            .font(.system(size: 20, weight: .medium))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 4)
+                        Button(role: .destructive) {
+                            noteText = ""
+                        } label: {
+                            Label("Clear", systemImage: "xmark.circle.fill")
+                                .font(.footnote)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
                     TextFieldLink(prompt: Text("Speak your note...")) {
-                        Label("Dictate", systemImage: "mic.fill")
+                        Label(noteText.isEmpty ? "Dictate" : "Add more", systemImage: "mic.fill")
                             .font(.title3)
                             .frame(maxWidth: .infinity)
                     } onSubmit: { result in
-                        noteText = result
-                    }
-
-                    if !noteText.isEmpty {
-                        Text(noteText)
-                            .font(.system(size: 32, weight: .medium))
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        let trimmed = result.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty else { return }
+                        noteText = noteText.isEmpty ? trimmed : "\(noteText) \(trimmed)"
                     }
                 }
                 .padding(.horizontal)

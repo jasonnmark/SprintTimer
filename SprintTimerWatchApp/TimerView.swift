@@ -8,18 +8,16 @@ enum TimerViewMode {
     case waitingForMotion
     case countdown
     case actionMenu
-    case outlierAlert
 }
 
 struct TimerView: View {
     @ObservedObject var viewModel: SprintTimerViewModel
     @Binding var isPresented: Bool
-    @State private var outlierReason = ""
     @State private var tapHandled = false
     @State private var isInLongPressMode = false
     @State private var timerStartedButHidden = false
     @State private var menuWorkItem: DispatchWorkItem?
-    @State private var pendingStopWasOutlier = false
+    @State private var gestureWatchdog: DispatchWorkItem?
     @State private var viewMode: TimerViewMode = .start
     @State private var savedElapsedTime: TimeInterval = 0
     @Environment(\.modelContext) private var modelContext
@@ -49,8 +47,6 @@ struct TimerView: View {
             switch viewMode {
             case .actionMenu:
                 actionMenuContent()
-            case .outlierAlert:
-                outlierAlertContent()
             default:
                 timerContent()
             }
@@ -60,6 +56,16 @@ struct TimerView: View {
         .onDisappear {
             menuWorkItem?.cancel()
             menuWorkItem = nil
+            gestureWatchdog?.cancel()
+            gestureWatchdog = nil
+        }
+        // Posted by NotesView after a save-with-notes completes, so we drop the
+        // underlying action menu and return to the full-screen start button
+        // instead of letting the runner dismiss back to the main screen.
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ResetTimerViewToStart"))) { _ in
+            viewMode = .start
+            savedElapsedTime = 0
+            resetGestureState()
         }
     }
     
@@ -225,73 +231,33 @@ struct TimerView: View {
         .padding(.top, 32)
     }
     
-    @ViewBuilder
-    private func outlierAlertContent() -> some View {
-        VStack(spacing: 16) {
-            Text("Keep?")
-                .font(.system(size: 26, weight: .bold))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.center)
-                .padding(.top, 16)
-
-            Button(action: {
-                viewModel.saveRunData(modelContext: modelContext)
-                viewModel.resetTimer()
-                viewMode = .start
-                savedElapsedTime = 0
-                isInLongPressMode = false
-                tapHandled = false
-            }) {
-                Text("Save")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(Color.green.opacity(0.75))
-                    .cornerRadius(10)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .padding(.horizontal, 4)
-
-            Button(action: {
-                viewModel.resetTimer()
-                viewMode = .start
-                savedElapsedTime = 0
-                isInLongPressMode = false
-                tapHandled = false
-            }) {
-                Text("Delete")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(Color.red.opacity(0.35))
-                    .cornerRadius(10)
-            }
-            .buttonStyle(PlainButtonStyle())
-            .padding(.horizontal, 4)
-
-            Spacer(minLength: 0)
-        }
-        .padding(.top, 16)
-    }
-
     private func saveRun() {
         viewModel.saveCurrentRun(modelContext: modelContext)
         viewModel.resetTimer()
         viewMode = .start
         savedElapsedTime = 0
-        isInLongPressMode = false
-        tapHandled = false
+        resetGestureState()
     }
-    
+
     private func deleteRun() {
         viewModel.resetTimer()
         viewMode = .start
         savedElapsedTime = 0
-        // Reset gesture state
+        resetGestureState()
+    }
+
+    /// Clears all gesture-related @State. Used after any explicit-action button
+    /// (Save/Delete/Notes) so a lingering long-press work item or an interrupted
+    /// `.onEnded` from a prior gesture can't leave the start screen stuck in the
+    /// faded "long-press" appearance with `tapHandled == true` blocking new taps.
+    private func resetGestureState() {
+        menuWorkItem?.cancel()
+        menuWorkItem = nil
+        gestureWatchdog?.cancel()
+        gestureWatchdog = nil
         isInLongPressMode = false
         tapHandled = false
+        timerStartedButHidden = false
     }
 
     /// Shared stop-the-run flow, callable from either the screen tap gesture or
@@ -300,30 +266,19 @@ struct TimerView: View {
     private func handleStopRunGesture(method: StopMethod = .tap) {
         guard currentMode == .running else { return }
 
-        let result = viewModel.stopRun(modelContext: modelContext, stopMethod: method)
-        pendingStopWasOutlier = result.isOutlier
+        viewModel.stopRun(modelContext: modelContext, stopMethod: method)
         savedElapsedTime = viewModel.elapsedTime
+        viewMode = .actionMenu
 
-        if result.isOutlier {
-            outlierReason = result.reason
-            viewMode = .outlierAlert
-        } else {
-            viewMode = .actionMenu
-        }
-
-        isInLongPressMode = false
-        tapHandled = false
+        resetGestureState()
     }
     
-    // CHANGED: no QuickBoard here; we ask RunnerView to open the Notes sheet
     private func saveWithNotes() {
-        // 1) Hide the in-view action menu immediately
-        viewMode = .start
-        isInLongPressMode = false
-        tapHandled = false
-        
-        // 2) Do NOT reset elapsed time here; we save after notes entry
-        // 3) Ask RunnerView to present the Notes sheet (which opens the watch keyboard)
+        // Keep viewMode == .actionMenu so cancelling the notes sheet drops the user
+        // back onto Save/Delete/Notes with the run still in-flight, instead of
+        // silently discarding it. The sheet covers the menu while it's open.
+        resetGestureState()
+
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: Notification.Name("ShowRunNotes"), object: nil)
         }
@@ -332,10 +287,11 @@ struct TimerView: View {
     private func combinedGesture() -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { _ in
-                guard viewMode != .actionMenu && viewMode != .outlierAlert else { return }
+                guard viewMode != .actionMenu else { return }
                 if !tapHandled {
                     tapHandled = true
                     isInLongPressMode = true
+                    armGestureWatchdog()
                     
                     if currentMode == .start {
                         // Start the timer
@@ -368,18 +324,37 @@ struct TimerView: View {
             .onEnded { _ in
                 menuWorkItem?.cancel()
                 menuWorkItem = nil
+                gestureWatchdog?.cancel()
+                gestureWatchdog = nil
                 isInLongPressMode = false
                 tapHandled = false
-                
+
                 if timerStartedButHidden {
                     timerStartedButHidden = false
                 }
             }
     }
+
+    /// Force-resets gesture state if `.onEnded` never fires (e.g. a sheet covered
+    /// the view mid-gesture and SwiftUI dropped the release event). Without this,
+    /// `tapHandled`/`isInLongPressMode` can stay true indefinitely, leaving the
+    /// start screen in its faded "long-press" appearance and blocking every
+    /// subsequent tap.
+    private func armGestureWatchdog() {
+        gestureWatchdog?.cancel()
+        let work = DispatchWorkItem {
+            isInLongPressMode = false
+            tapHandled = false
+            timerStartedButHidden = false
+            gestureWatchdog = nil
+        }
+        gestureWatchdog = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0, execute: work)
+    }
     
     private func backgroundColor() -> Color {
         switch viewMode {
-        case .actionMenu, .outlierAlert:
+        case .actionMenu:
             return Color.black.opacity(0.9)
         default:
             if currentMode == .start || timerStartedButHidden {

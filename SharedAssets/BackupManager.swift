@@ -298,6 +298,7 @@ class BackupManager: ObservableObject {
         if let v = run.longitude { d["longitude"] = v }
         if let v = run.altitude { d["altitude"] = v }
         if let v = run.altitudeGain { d["altitudeGain"] = v }
+        if let v = run.gpsTimeToTarget { d["gpsTimeToTarget"] = v }
         if let v = run.locationName { d["locationName"] = v }
         if let v = run.startHeartRate { d["startHeartRate"] = v }
         if let v = run.endHeartRate { d["endHeartRate"] = v }
@@ -371,6 +372,7 @@ class BackupManager: ObservableObject {
                 if let v = runDict["longitude"] as? Double { run.longitude = v }
                 if let v = runDict["altitude"] as? Double { run.altitude = v }
                 if let v = runDict["altitudeGain"] as? Double { run.altitudeGain = v }
+                if let v = runDict["gpsTimeToTarget"] as? Double { run.gpsTimeToTarget = v }
                 if let v = runDict["locationName"] as? String { run.locationName = v }
                 if let v = runDict["startHeartRate"] as? Double { run.startHeartRate = v }
                 if let v = runDict["endHeartRate"] as? Double { run.endHeartRate = v }
